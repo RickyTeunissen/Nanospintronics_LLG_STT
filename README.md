@@ -6,9 +6,14 @@ Created as part of the course Nanospintronics (3MN220) at the technical Universi
 ## About this project
 The code of this file has been written as part of the course Nanospintronics at the TUE 
 
-The system at hand consists of: 
+The system at hand consists of a thin nanopillar consisting of a thick "pinned" ferromagnetic layer 
+followed by a thin conducting layer and a thin "free" ferromagnetic layer.
+The exact stack composition is:
+
+Cu(80nm)/Co(40nm)/Cu(thin)/Co(3nm)/Cu(10nm)
 
 The coordinate system is define by:
+
 ![](Images/Coordinate system.png)
 
 ## Files and necessities
