@@ -48,8 +48,8 @@ def LLG(t, m3d: tuple, Hext: np.array, alpha: float = 0.01, Ms: float = 0.127e7)
     :param Ms: Saturation magnetization in [A/m]
     :return: (dmx,dmy,dmz)
     """
-    gyro_ratio = 8.8e10  # later modify
-    mu0 = 1.256e-6  # later modify?
+    mu0 = 4*np.Pi*10**(-7)  # [N/A^2]
+    gyro_ratio = (1.760896*10**11)/mu0  # [A/m]
 
     # spin_precession = -gyro_ratio * mu0 / (1 + alpha ** 2) * (np.cross(m3d, H)
     # gilbert_damping = alpha * np.cross(m3d, np.cross(m3d, H)))
@@ -86,7 +86,7 @@ def LLG_solver(IC: tuple, t_points: np.array, Hext: tuple, alpha: float = 0.01, 
 
 if __name__ == "__main__":
     # let's run an example of the LLG solver for some IC.
-    # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temp = 0
+    # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temperature = 0
 
     Hext = np.array([0, 10e5, 0]) # external field in the y direction
     m0 = np.sqrt(1/2)*np.array([1, 1, 0])
