@@ -21,8 +21,8 @@ def LLG(t, m3d: tuple, H: tuple, alpha: float = 0.01, Ms: float = 0.127e7):
     :param Ms: Saturation magnetization in [A/m]
     :return: (dmx,dmy,dmz)
     """
-    gyro_ratio = 8.8e10  # later modify
-    mu0 = 1.256e-6  # later modify?
+    mu0 = 4*np.Pi*10**(-7)  # [N/A^2]
+    gyro_ratio = (1.760896*10**11)/mu0  # [A/m]
 
     dmx, dmy, dmz = -gyro_ratio * mu0 / (1 + alpha ** 2) * (np.cross(m3d, H) + alpha * np.cross(m3d, np.cross(m3d, H)))
 
@@ -31,7 +31,7 @@ def LLG(t, m3d: tuple, H: tuple, alpha: float = 0.01, Ms: float = 0.127e7):
 
 def LLG_solver(IC:tuple, t_points: np.array, H:tuple, alpha: float = 0.01, Ms:float = 0.127e7):
     """
-    Solves the LLG equaiton for given IC and parameters in the time range t_points
+    Solves the LLG equation for given IC and parameters in the time range t_points
 
     :param IC: (mx0,my0,mz0) Initial M direction:
     :param t_points: Array of time points at which we wanna evaluate the solution
@@ -54,7 +54,7 @@ def LLG_solver(IC:tuple, t_points: np.array, H:tuple, alpha: float = 0.01, Ms:fl
 
 if __name__ == "__main__":
     # let's run an example of the LLG solver for some IC.
-    # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temp = 0
+    # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temperature = 0
 
     H = np.array([10e3, 10e3, 10e4])
     m0 = np.sqrt(np.array([1, 1, 0]))
