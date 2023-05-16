@@ -89,25 +89,25 @@ if __name__ == "__main__":
     # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temp = 0
 
     Hext = np.array([0, 10e5, 0]) # external field in the y direction
-    m0 = np.sqrt(np.array([1, 1, 0]))
+    m0 = np.sqrt(1/2)*np.array([1, 1, 0])
     t = np.arange(0, 10e-9, 1e-12)
     mx, my, mz = LLG_solver(m0, t, Hext)
 
     f = plt.figure(1)
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-")
-    axf.scatter(1, 1, 0, color="red", lw=10)
+    axf.scatter(m0[0],m0[1],m0[2], color="red", lw=10)
     axf.set_xlabel("mx")
     axf.set_ylabel("my")
     axf.set_zlabel("mz")
     axf.set_title("Some stupid example")
 
-    axf.set_xlim([-2, 2])
-    axf.set_ylim([-2, 2])
-    axf.set_zlim([-2, 2])
+    axf.set_xlim([-1.5, 1.5])
+    axf.set_ylim([-1.5, 1.5])
+    axf.set_zlim([-1.5, 1.5])
 
     fig2,ax =  plt.subplots(3,1)
-    ax[0].plot(t,mx)
-    ax[1].plot(t,my)
-    ax[2].plot(t,mz)
+    ax[0].plot(t, mx)
+    ax[1].plot(t, my)
+    ax[2].plot(t, mz)
     plt.show()
