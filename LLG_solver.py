@@ -1,14 +1,14 @@
 """"
-Within this file, 2 functions are present
-- LLG : The LLG equation
-- LLG_SOLVE : use the scipy.solve_IPV function to solve the LLg ODE for given parameters
-Additional functions to calculate e.g. the energy or.... can be added later
+Within this file, all functions relevant for solving the LLG ODE are present:
+- The actual ODE solver itself: LLG_solver()
+- The LLG equation together with functions for relevant parameters such as e.g. the effective magnetic field, spin
+    torque, etc.
 """
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-def LLG(t, m3d:tuple, H:tuple, alpha:float = 0.01,Ms:float = 0.127e7 ):
+def LLG(t, m3d: tuple, H: tuple, alpha: float = 0.01, Ms: float = 0.127e7):
     """
     returns the right hand side of the IMPLICIT LLG equation
 
@@ -21,15 +21,15 @@ def LLG(t, m3d:tuple, H:tuple, alpha:float = 0.01,Ms:float = 0.127e7 ):
     :param Ms: Saturation magnetization in [A/m]
     :return: (dmx,dmy,dmz)
     """
-    gyro_ratio = 8.8e10 # later modify
-    mu0 = 1.256e-6 #later modify?
+    gyro_ratio = 8.8e10  # later modify
+    mu0 = 1.256e-6  # later modify?
 
-    dmx,dmy,dmz = -gyro_ratio*mu0/(1+alpha**2)*(np.cross(m3d,H)+alpha*np.cross(m3d,np.cross(m3d,H)))
+    dmx, dmy, dmz = -gyro_ratio * mu0 / (1 + alpha ** 2) * (np.cross(m3d, H) + alpha * np.cross(m3d, np.cross(m3d, H)))
 
-    return dmx,dmy,dmz
+    return dmx, dmy, dmz
 
 
-def LLG_solver(IC:tuple,t_points:np.array, H:tuple, alpha:float = 0.01,Ms:float = 0.127e7):
+def LLG_solver(IC:tuple, t_points: np.array, H:tuple, alpha: float = 0.01, Ms:float = 0.127e7):
     """
     Solves the LLG equaiton for given IC and parameters in the time range t_points
 
@@ -43,12 +43,12 @@ def LLG_solver(IC:tuple,t_points:np.array, H:tuple, alpha:float = 0.01,Ms:float 
 
     tspan = [t_points[0], t_points[-1]]  # ODE solver needs to know t bounds in advance
 
-    parameters  =(H, alpha, Ms)
-    LLG_sol = solve_ivp(LLG,y0 = IC, t_span = tspan, t_eval=t_points, args = parameters)
+    parameters = (H, alpha, Ms)
+    LLG_sol = solve_ivp(LLG, y0=IC, t_span=tspan, t_eval=t_points, args=parameters)
 
-    mx_sol = LLG_sol.y[0,:]
-    my_sol = LLG_sol.y[1,:]
-    mz_sol = LLG_sol.y[2,:]
+    mx_sol = LLG_sol.y[0, :]
+    my_sol = LLG_sol.y[1, :]
+    mz_sol = LLG_sol.y[2, :]
     return mx_sol, my_sol, mz_sol
 
 
@@ -59,12 +59,12 @@ if __name__ == "__main__":
     H = np.array([10e3, 10e3, 10e4])
     m0 = np.sqrt(np.array([1, 1, 0]))
     t = np.arange(0, 10e-9, 1e-11)
-    mx,my,mz = LLG_solver(m0, t,H)
+    mx, my, mz = LLG_solver(m0, t, H)
 
     f = plt.figure(1)
     axf = f.add_subplot(projection="3d")
-    axf.plot(mx,my,mz, "b-")
-    axf.scatter(1,1,0, color="red", lw = 10)
+    axf.plot(mx, my, mz, "b-")
+    axf.scatter(1, 1, 0, color="red", lw=10)
     axf.set_xlabel("mx")
     axf.set_ylabel("my")
     axf.set_zlabel("mz")
@@ -75,6 +75,3 @@ if __name__ == "__main__":
     axf.set_zlim([-2, 2])
 
     plt.show()
-
-
-
