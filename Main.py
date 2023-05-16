@@ -15,3 +15,4 @@ ax[0, 0].plot(test, test ** 2)
 ax[0, 0].set_xlabel("lol")
 ax[0, 0].set_ylabel("hihie")
 plt.show()
+
