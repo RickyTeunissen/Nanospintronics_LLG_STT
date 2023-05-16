@@ -8,6 +8,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
+def calc_effective_field(m3d):
+    pass
+
+def calc_total_spin_torque():
+    pass
 
 def LLG(t, m3d: tuple, H: tuple, alpha: float = 0.01, Ms:float = 0.127e7):
     """
@@ -25,18 +30,22 @@ def LLG(t, m3d: tuple, H: tuple, alpha: float = 0.01, Ms:float = 0.127e7):
     gyro_ratio = 8.8e10  # later modify
     mu0 = 1.256e-6  # later modify?
 
+    #spin_precession = -gyro_ratio * mu0 / (1 + alpha ** 2) * (np.cross(m3d, H)
+    #gilbert_damping = alpha * np.cross(m3d, np.cross(m3d, H)))
+    #=
+
     dmx, dmy, dmz = -gyro_ratio * mu0 / (1 + alpha ** 2) * (np.cross(m3d, H) + alpha * np.cross(m3d, np.cross(m3d, H)))
 
     return dmx, dmy, dmz
 
 
-def LLG_solver(IC:tuple, t_points: np.array, H:tuple, alpha: float = 0.01, Ms:float = 0.127e7):
+def LLG_solver(IC:tuple, t_points: np.array, Hext:tuple, alpha: float = 0.01, Ms:float = 0.127e7):
     """
-    Solves the LLG equaiton for given IC and parameters in the time range t_points
+    Solves the LLG equation for given IC and parameters in the time range t_points
 
     :param IC: (mx0,my0,mz0) Initial M direction:
     :param t_points: Array of time points at which we wanna evaluate the solution
-    :param H: tuple(Hx,Hy,Hz): the magnetic field in [A/m]
+    :param Hext: tuple(Hx,Hy,Hz): the external magnetic field in [A/m]
     :param alpha: float: damping constant
     :param Ms: Saturation magnetization in [A/m]
     :return: unit vector m over time in
