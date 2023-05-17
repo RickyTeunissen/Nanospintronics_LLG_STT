@@ -9,13 +9,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 import scipy.constants as constants
-import scipy
+from matplotlib.ticker import FormatStrFormatter
+from matplotlib.ticker import MultipleLocator
 
 mu0: float = constants.mu_0  # [N/A^2]
-gyro_ratio: float = 1.760896 * 10 ** 8  # [A/m]
+gyro_ratio: float = 1.760896 * 10 ** 10  # [A/m]
 hbar: float = constants.hbar
 me: float = constants.electron_mass
-gyro_ratio1: float = constants.elementary_charge/(2*me)  # [A/m]
+#gyro_ratio: float = constants.elementary_charge/(2*me)  # [A/m]
 
 
 def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float) -> tuple:
@@ -40,7 +41,6 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float) -> tuple:
     return Heff
 
 
-
 def calc_total_spin_torque():
     pass
 
@@ -51,45 +51,50 @@ def N(J: float, d: float, m3d: np.array, M3d: np.array) -> np.array:
     return N_spin_transfer
 
 
-def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float):
+def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple):
     """
     returns the right hand side of the IMPLICIT LLG equation
 
     Maybe later watch out with e.g. units (kA/m vs A/m, normalized units?,...)
 
     :param t: later used by ODE solve to store time step
-    :param m3d: tuple(mx,my,mz) = Unit vector,  holds  the current magnetization
+    :param m3d: tuple(mx,my,mz) = Unit vector, magnetization of the free layer
     :param Hext: tuple(Hx,Hy,Hz): the magnetic field in [A/m]
-    :param alpha: float: damping constant
+    :param alpha: damping constant
     :param Ms: Saturation magnetization in [A/m]
+    :param J: The current area density through the spin valve [A/m^2]
+    :param d: The thickness of the free layer [m]
+    :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
     :return: (dmx,dmy,dmz)
     """
 
     Heff = calc_effective_field(m3d, Hext, Ms)
-    # spinTorque = (gyro_ratio / (mu0 * Ms)) * N
+    basics = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + alpha * np.cross(m3d, np.cross(m3d, Heff)))
+    spinTorque = (gyro_ratio / (mu0 * Ms)) * N(J, d, m3d, M3d)
 
-    spin_precession = -gyro_ratio * mu0 / (1 + alpha**2) * (np.cross(m3d, Heff))
-    gilbert_damping = alpha * np.cross(m3d, np.cross(m3d, Heff))
-    dmx, dmy, dmz = spin_precession + gilbert_damping
+    dmx, dmy, dmz = basics + spinTorque
 
     return dmx, dmy, dmz
 
 
-def LLG_solver(IC: tuple, t_points: np.array, Hext: np.array, alpha: float = 0.05, Ms: float = 1.27e6):
+def LLG_solver(IC: tuple, t_points: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple) -> tuple:
     """
     Solves the LLG equation for given IC and parameters in the time range t_points
 
-    :param IC: (mx0,my0,mz0) Initial M direction:
+    :param IC: (mx0,my0,mz0) Initial magnetization of the free layer:
     :param t_points: Array of time points at which we wanna evaluate the solution
     :param Hext: tuple(Hx,Hy,Hz): the external magnetic field in [A/m]
-    :param alpha: float: damping constant
+    :param alpha: damping constant
     :param Ms: Saturation magnetization in [A/m]
+    :param J: The current area density through the spin valve [A/m^2]
+    :param d: The thickness of the free layer [m]
+    :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
     :return: unit vector m over time in
     """
 
     tspan = [t_points[0], t_points[-1]]  # ODE solver needs to know t bounds in advance
 
-    parameters = (Hext, alpha, Ms)
+    parameters = (Hext, alpha, Ms, J, d, M3d)
     LLG_sol = solve_ivp(LLG, y0=IC, t_span=tspan, t_eval=t_points, args=parameters)
 
     mx_sol = LLG_sol.y[0, :]
@@ -105,15 +110,7 @@ def polarToCartesian(r: float, theta: float, phi: float) -> np.array:
     return np.array([x, y, z])
 
 
-if __name__ == "__main__":
-    # let's run an example of the LLG solver for some IC.
-    # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temperature = 0
-
-    Hext = np.array([0, 0.2e6, 0])  # external field in the y direction
-    m0 = polarToCartesian(1, 0.2, 0)
-    t = np.arange(0, 1e-9, 0.1e-12)
-    mx, my, mz = LLG_solver(m0, t, Hext)
-
+def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array):
     f = plt.figure(1)
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-")
@@ -122,13 +119,42 @@ if __name__ == "__main__":
     axf.set_ylabel("my")
     axf.set_zlabel("mz")
     axf.set_title("Some stupid example")
-
-    axf.set_xlim([-1.5, 1.5])
-    axf.set_ylim([-1.5, 1.5])
-    axf.set_zlim([-1.5, 1.5])
+    axf.xaxis.set_major_locator(MultipleLocator(0.5))
+    axf.yaxis.set_major_locator(MultipleLocator(0.5))
+    axf.zaxis.set_major_locator(MultipleLocator(0.5))
+    axf.xaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    axf.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    axf.zaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    axf.set_xlim([-1, 1])
+    axf.set_ylim([-1, 1])
+    axf.set_zlim([-1, 1])
 
     fig2, ax = plt.subplots(3, 1)
     ax[0].plot(t, mx)
+    ax[0].set_ylabel("mx")
+    ax[0].set_ylim([-1.1, 1.1])
     ax[1].plot(t, my)
+    ax[1].set_ylabel("my")
+    ax[1].set_ylim([-1.1, 1.1])
     ax[2].plot(t, mz)
+    ax[2].set_ylabel("mz")
+    ax[2].set_ylim([-1.1, 1.1])
     plt.show()
+
+
+if __name__ == "__main__":
+    # let's run an example of the LLG solver for some IC.
+    # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temperature = 0
+
+    Hext = np.array([0.2e6, 0, 0])  # [A/m]
+    m0 = polarToCartesian(1, 0.4*np.pi, 0)
+    alpha = 0.1
+    Ms = 1.27e6  # [A/m]
+    J = 0.0001  # [???] some form of A/m^2
+    d = 1e-9  # [m]
+    M3d = polarToCartesian(1, 0, 0)
+    t = np.arange(0, 2.5e-9, 1e-12)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, M3d)
+
+    plotResult(mx, my, mz, m0, t)
+
