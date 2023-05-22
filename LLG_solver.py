@@ -157,12 +157,12 @@ if __name__ == "__main__":
     # NOTE: MUST ALWAYS START AT SOME ANGLE AS ELSE MAYBE ISSUE's when temperature = 0
 
     Hext = np.array([-3.9e4, 0, 0])  # [A/m]
-    m0 = polarToCartesian(1, 0.49*np.pi, 0.1)
+    m0 = polarToCartesian(1, 0.49 * np.pi, 0.1)
     alpha = 0.1
     Ms = 1.27e6  # [A/m]
-    J = 1e8  # [A/m^2]
+    J = 1e7  # [A/m^2]
     d = 3e-9  # [m]
-    M3d = np.array([0, 0, 1]) #polarToCartesian(1, 0.5*np.pi, 0)
+    M3d = np.array([0, 0, 1])  # polarToCartesian(1, 0.5*np.pi, 0)
     t = np.arange(0, 0.5e-10, 5e-16)
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, M3d)
 
