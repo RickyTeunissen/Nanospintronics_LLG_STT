@@ -25,3 +25,4 @@ This project consists of multiple files each with their purpose:
 
 ## important considerations:
 - Maybe renormalize H_temp 
+- is alpha 0.01?
