@@ -22,3 +22,6 @@ This project consists of multiple files each with their purpose:
 - .....py can be run to ....
 - .....py constains a series of relevant functions
 - .
+
+## important considerations:
+- Maybe renormalize H_temp 
