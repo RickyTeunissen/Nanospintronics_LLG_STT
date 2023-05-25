@@ -21,9 +21,6 @@ gyro_ratio: float = 2 * charge / (2 * me)  # [A/m]
 kb: float = constants.Boltzmann  # [m^2 kg S^-2 K^-1]
 
 
-# gyro_ratio: float = 1.760896 * 10 ** 11  # [A/m]
-
-
 def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np.array, current_time: float,
                          t_stepsize: float) -> tuple:
     """
@@ -56,7 +53,8 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     return Heff
 
 
-def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: float, d: float, area: float):
+def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: float, d: float, area: float,
+                           alpha: float):
     """
     Calcutes the total spin torque, includes:
     - spin transfer torque
@@ -71,11 +69,15 @@ def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: flo
     :param area: area of sample [m^2]
     :return: np.array([dmx, dmy, dmz]) due to spin torque
     """
+    # if wanna add eta = ...
+    # need to use: STT = -J/e*gyro*hbar/(2*Ms*mu0*d)*eta*1/(1+alpha**2)*(m cross m cross M - alpha*m cross M)
+
+    ### ALLL TOTALLY WRONGGG #########
     # spin transfer torque contribution
-    eta = 1
-    spin_transfer_torque = gyro_ratio / (mu0 * Ms) * eta * hbar / (2 * charge) * current / d * np.cross(m3d,
-                                                                                                        np.cross(m3d,
-                                                                                                                 M3d))
+    eta = 1 #how add?
+    pre = hbar/(2*charge*d*mu0*Ms)
+    spin_transfer_torque = 1 / (1 + alpha ** 2)*current*(-pre*np.cross(m3d, np.cross(m3d,M3d)) - alpha*pre*np.cross(m3d,np.cross(m3d, np.cross(m3d, M3d))))
+    #gyro_ratio / (mu0 * Ms) * eta * hbar / (2 * charge) * current / d * np.cross(m3d, np.cross(m3d, M3d))
 
     total_torque = spin_transfer_torque
     return total_torque
@@ -101,15 +103,21 @@ def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: flo
     :return: (dmx,dmy,dmz)
     """
 
-    Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize)
-    preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + \
-                                                            alpha * np.cross(m3d, np.cross(m3d, Heff)))
+    # renormalize m due to stochastic field (is sketchy but better then nothing)
+    m3d-= m3d - m3d/np.linalg.norm(m3d)
 
-    spinTorque = calc_total_spin_torque(J, m3d, M3d, Ms, d, area)
+    #calculate preceission + damping:
+    Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize)
+    preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + alpha * np.cross(m3d, np.cross(m3d, Heff)))
+
+    # calculate contribution normal spin transfer torque (look my notes if wanna add eta)
+    pre = -J/charge*gyro_ratio*hbar/(2*Ms*d)*1/(1+alpha**2)
+    spinTorque = pre*(np.cross(m3d, np.cross(m3d, M3d)) - alpha*np.cross(m3d, M3d))
 
     dmx, dmy, dmz = preces_damp + spinTorque
 
-    return dmx, dmy, dmz
+
+    return dmx, dmy ,dmz
 
 
 def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float,
@@ -162,14 +170,16 @@ def polarToCartesian(r: float, theta: float, phi: float) -> np.array:
 
 
 def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array):
-    f = plt.figure(1)
+    f = plt.figure(1,figsize=(8,7))
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-", lw=0.3)
-    axf.scatter(m0[0], m0[1], m0[2], color="red", lw=5)
-    axf.set_xlabel("mx")
-    axf.set_ylabel("my")
-    axf.set_zlabel("mz")
-    axf.set_title("Magnetization direction over time")
+    last_part = np.floor(mz.shape[0]*0.05).astype(int) # draw last 5% green to show e.g. stable orbit shape
+    axf.plot(mx[-last_part:],my[-last_part:], mz[-last_part:], color = "lime", lw=2)
+    axf.scatter(m0[0], m0[1], m0[2], color="red", lw=3) # startpoint
+    axf.set_xlabel("mx/Ms")
+    axf.set_ylabel("my/Ms")
+    axf.set_zlabel("mz/Ms")
+    axf.set_title("Magnetization direction over time", fontweight="bold")
     axf.xaxis.set_major_locator(MultipleLocator(0.5))
     axf.yaxis.set_major_locator(MultipleLocator(0.5))
     axf.zaxis.set_major_locator(MultipleLocator(0.5))
@@ -181,19 +191,25 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     axf.set_zlim([-1, 1])
 
     fig2, ax = plt.subplots(3, 1, sharex=True)
+    fig2.suptitle("Magnetization over time", fontweight="bold")
     ax[0].plot(t, mx, lw=0.6)
-    ax[0].set_ylabel("mx")
+    ax[0].set_ylabel("mx/Ms")
     ax[0].set_ylim([-1.1, 1.1])
     ax[0].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
     ax[1].plot(t, my, lw=0.6)
-    ax[1].set_ylabel("my")
+    ax[1].set_ylabel("my/Ms")
     ax[1].set_ylim([-1.1, 1.1])
     ax[1].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
     ax[2].plot(t, mz, lw=0.6)
-    ax[2].set_ylabel("mz")
+    ax[2].set_ylabel("mz/Ms")
     ax[2].set_ylim([-1.1, 1.1])
     ax[2].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
     ax[2].set_xlabel("time [s]")
+
+    plt.figure(3)
+    plt.title("unit vector lenght over time (for stability)")
+    plt.plot(np.sqrt(mz**2+mx**2+my**2))
+
     plt.show()
 
 
@@ -204,22 +220,25 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-5e5, 0, 0])  # [A/m]
+    Hext = np.array([4.77e4, 0, 0])  # [A/m]
     m0 = np.array([1, 0, 0])  # polarToCartesian(1, 0.49 * np.pi, 0.1)
-    alpha = 0.1  # SHOULD BE 0.01 FOR Cu!
+    alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    J = 0  # 1e7  # [A/m^2]
+    J = 0.15e12 # [A/m^2]
     d = 3e-9  # [m]
     area = 130e-9 * 70e-9
-    M3d = np.array([0, 0, 1])  # polarToCartesian(1, 0.5*np.pi, 0)
-    temperature = 300  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    M3d = np.array([-1, 0, 0])  # polarToCartesian(1, 0.5*np.pi, 0)
+    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+
+    renormalize_counter = 100 # how often renormalize m3d
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 5e-10, 1e-12)
+    t = np.arange(0, 20e-9, 1e-12)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, area, temperature, M3d)
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")
+
     plotResult(mx, my, mz, m0, t)
