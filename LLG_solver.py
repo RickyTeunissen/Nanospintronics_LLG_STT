@@ -4,7 +4,7 @@ Within this file, all functions relevant for solving the LLG ODE are present:
 - The LLG equation together with functions for relevant parameters such as e.g. the effective magnetic field, spin
     torque, etc.
 """
-
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
@@ -56,14 +56,29 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     return Heff
 
 
-def calc_total_spin_torque():
-    pass
+def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: float, d: float, area: float):
+    """
+    Calcutes the total spin torque, includes:
+    - spin transfer torque
+    - spin pumpin (later)
+    - Current-induced effective field (later? but often negligible)
 
-
-def N(J: float, d: float, m3d: np.array, M3d: np.array) -> np.array:
+    :param current: The current put through system [A]
+    :param m3d: unit vector representing the direction of M in the free layer [mx,my,mz]
+    :param M3d: unit vector representing the direction of M in the fixed layer [Mx,My,Mz]
+    :param Ms: saturation magentization [A/m]
+    :param d: thickness of sample [m]
+    :param area: area of sample [m^2]
+    :return: np.array([dmx, dmy, dmz]) due to spin torque
+    """
+    # spin transfer torque contribution
     eta = 1
-    N_spin_transfer = eta * (hbar / (2 * charge)) * (J / d) * np.cross(m3d, np.cross(m3d, M3d))
-    return N_spin_transfer
+    spin_transfer_torque = gyro_ratio / (mu0 * Ms) * eta * hbar / (2 * charge) * current / d * np.cross(m3d,
+                                                                                                        np.cross(m3d,
+                                                                                                                 M3d))
+
+    total_torque = spin_transfer_torque
+    return total_torque
 
 
 def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: float, area: float, M3d: tuple,
@@ -85,12 +100,14 @@ def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: flo
     :param H_temp_array: array of random fields over time due to temperature (number timesteps)x3
     :return: (dmx,dmy,dmz)
     """
+
     Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize)
+    preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + \
+                                                            alpha * np.cross(m3d, np.cross(m3d, Heff)))
 
-    basics = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + alpha * np.cross(m3d, np.cross(m3d, Heff)))
-    spinTorque = (gyro_ratio / (mu0 * Ms)) * N(J, d, m3d, M3d)
+    spinTorque = calc_total_spin_torque(J, m3d, M3d, Ms, d, area)
 
-    dmx, dmy, dmz = basics + spinTorque
+    dmx, dmy, dmz = preces_damp + spinTorque
 
     return dmx, dmy, dmz
 
@@ -183,11 +200,13 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
 if __name__ == "__main__":
     # let's run an example of the LLG solver for some IC.
     # NOTE: MUST ALWAYS START AT SOME ANGLE WHEN TEMPERATURE=0
+    print("Starting trajectory calculation....")
+    start = time.time()
 
     # defining relevant system parameters:
     Hext = np.array([-5e5, 0, 0])  # [A/m]
     m0 = np.array([1, 0, 0])  # polarToCartesian(1, 0.49 * np.pi, 0.1)
-    alpha = 0.1
+    alpha = 0.1  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     J = 0  # 1e7  # [A/m^2]
     d = 3e-9  # [m]
@@ -196,8 +215,11 @@ if __name__ == "__main__":
     temperature = 300  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 5e-10, 1e-13)
+    t = np.arange(0, 5e-10, 1e-12)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, area, temperature, M3d)
+
+    end = time.time()
+    print(f"Code ran in {end - start} seconds")
     plotResult(mx, my, mz, m0, t)
