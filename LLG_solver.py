@@ -9,8 +9,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 import scipy.constants as constants
+import scipy.special
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import MultipleLocator
+from math import sqrt
 
 # Defining relevant physical constants.
 mu0: float = constants.mu_0  # [N/A^2]
@@ -22,12 +24,12 @@ kb: float = constants.Boltzmann  # [m^2 kg S^-2 K^-1]
 
 
 def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np.array, current_time: float,
-                         t_stepsize: float) -> tuple:
+                         t_stepsize: float,demag_tens:np.array,K_surf:float, thickness:float) -> tuple:
     """
     Calculates the effective field based on a given state of the system.
     Takes into account:
     - demag field
-    - anisotropic field (NOT YET)
+    - surface anisotropy
     - stochatsic field due to thermal fluctuations
 
     :param m3d: 3d tuple for the unit vector of the magnetizaiton (mx,my,mz)
@@ -36,19 +38,25 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     :param H_temp_array: array of random fields over time due to temperature (number timesteps)x3
     :param current_time: current time where the ODE solver is solving
     :param t_stepsize: stepsize in [s] between ODE solution points
+    :param demag_tens: array of all diagonal components of the demag tensor
+    :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
+    :param thickness: thickness cylinder in [m]
     :return: Heff = (Heffx, Heffy, Heffz) = effective field in [A/m]
     """
     # Still add magnetocrystalline ani, maybe even T dep?:
 
     # we use thin films, these have a demagnetization field:
-    H_demag = np.array([0, 0, -m3d[2] * Ms])
+    H_demag = -Ms*demag_tens*m3d
 
     # additional contribution due to temperature fluctuations first calculate in which step we are (s.t. in same t step
     # always pick same value if call this function > once)
     step_index = np.floor(current_time / t_stepsize).astype(int)
     H_temp = H_temp_array[step_index]
 
-    Heff = H_demag + Hext + H_temp
+    # contribution by surface anistropy NOT YET CORRECT
+    #H_surf_ani = np.array([0, 0, 4*K_surf/(mu0*Ms*d)*m3d[2]**2])
+
+    Heff = Hext + H_demag + H_temp #+ H_surf_ani
 
     return Heff
 
@@ -83,8 +91,8 @@ def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: flo
     return total_torque
 
 
-def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: float, area: float, M3d: tuple,
-        H_temp_array: np.array, t_stepsize):
+def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple,
+        H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf:float):
     """
     returns the right hand side of the IMPLICIT LLG equation
 
@@ -97,9 +105,10 @@ def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: flo
     :param Ms: Saturation magnetization in [A/m]
     :param J: The current area density through the spin valve [A/m^2]
     :param d: The thickness of the free layer [m]
-    :param area: the cross sectional area of the pillar [m^2]
     :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
     :param H_temp_array: array of random fields over time due to temperature (number timesteps)x3
+    :param demag_tensor: array of all diagonal components of the demag tensor
+    :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
     :return: (dmx,dmy,dmz)
     """
 
@@ -107,7 +116,7 @@ def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: flo
     m3d-= m3d - m3d/np.linalg.norm(m3d)
 
     #calculate preceission + damping:
-    Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize)
+    Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize, demag_tensor, K_surf, d)
     preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + alpha * np.cross(m3d, np.cross(m3d, Heff)))
 
     # calculate contribution normal spin transfer torque (look my notes if wanna add eta)
@@ -116,12 +125,11 @@ def LLG(t, m3d: tuple, Hext: np.array, alpha: float, Ms: float, J: float, d: flo
 
     dmx, dmy, dmz = preces_damp + spinTorque
 
-
     return dmx, dmy ,dmz
 
 
-def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float,
-               area: float, temp: float, M3d: np.array) -> tuple:
+def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, Ms: float, J: float, thickness: float,
+               width_x: float,width_y:float, temp: float, M3d: np.array, K_surf: float) -> tuple:
     """
     Solves the LLG equation for given IC and parameters in the time range t_points
 
@@ -131,22 +139,36 @@ def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, M
     :param alpha: damping constant
     :param Ms: Saturation magnetization in [A/m]
     :param J: The current area density through the spin valve [A/m^2]
-    :param d: The thickness of the free layer [m]
-    :param area: the cross sectional area of the pillar [m^2]
-    :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
+    :param thickness: The thickness of the free layer [m]
+    :param width_x: total width cylinder in longest direction [m]
+    :param width_y: total width cylinder in smallest direction [m]
     :param temp: temperature of system [K]
+    :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
+    :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
+
     :return: unit vector m over time in
     """
 
     tspan = [t_points[0], t_points[-1]]  # ODE solver needs to know t bounds in advance
     t_step_size = t_points[1] - t_points[0]
 
+    # calculate demag tensors for system, based on https://doi.org/10.1103/PhysRev.67.351 eq(2.23)-(2.25):
+    a, b, c = width_x / 2, width_y / 2, thickness / 2
+    argument = sqrt(1 - (b / a) ** 2)
+    F_ellip_int = scipy.special.ellipk(argument)
+    E_ellip_int = scipy.special.ellipe(argument)
+    Nx = c / a * sqrt(1 - argument ** 2) * (F_ellip_int - E_ellip_int) / argument ** 2
+    Ny = c / a * (E_ellip_int - (1 - argument ** 2) * F_ellip_int) / (argument ** 2 * sqrt(1 - argument ** 2))
+    Nz = 1 - c / a * E_ellip_int / sqrt(1 - argument ** 2)
+    demag_tensor = np.array([Nx, Ny, Nz])  # to test: print(demag_tensor, np.sum(demag_tensor))
+
     # precompute random field array due to temperature:
-    H_temp_std = np.sqrt(2 * kb * alpha * temp / (mu0 * Ms ** 2 * d * area) / t_step_size)
+    vol = np.pi*a*b*thickness
+    H_temp_std = sqrt(2 * kb * alpha * temp / (mu0 * Ms ** 2 * vol) / t_step_size)
     H_temp_arr = np.random.normal(0, H_temp_std, [t_points.shape[0], 3])  # gives array(meas points, 3) for all H terms
 
     # solve the ODE
-    parameters = (Hext, alpha, Ms, J, d, area, M3d, H_temp_arr, t_step_size)
+    parameters = (Hext, alpha, Ms, J, thickness, M3d, H_temp_arr, t_step_size, demag_tensor, K_surf)
     LLG_sol = solve_ivp(LLG, y0=IC, t_span=tspan, t_eval=t_points, args=parameters, method="RK45")
 
     # pack out solutions
@@ -220,23 +242,25 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([4.77e4, 0, 0])  # [A/m]
-    m0 = np.array([1, 0, 0])  # polarToCartesian(1, 0.49 * np.pi, 0.1)
+    Hext = np.array([-5.5e4, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    J = 0.15e12 # [A/m^2]
+    K_surface = 0.5e-3 # J/m^2
+    J = 0.2e12 # [A/m^2]
     d = 3e-9  # [m]
-    area = 130e-9 * 70e-9
-    M3d = np.array([-1, 0, 0])  # polarToCartesian(1, 0.5*np.pi, 0)
+    width_x = 130e-9 # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
+    width_y = 70e-9 # [m]
     temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
-    renormalize_counter = 100 # how often renormalize m3d
+    # initial direction free layer and fixed layer
+    m0 = np.array([1, 0, 0])
+    M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 20e-9, 1e-12)
+    t = np.arange(0, 10e-9, 1e-12)
 
     # solving the system
-    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, area, temperature, M3d)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface)
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")
