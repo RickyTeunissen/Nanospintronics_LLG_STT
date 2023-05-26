@@ -14,7 +14,7 @@ Cu(80nm)/Co(40nm)/Cu(thin)/Co(3nm)/Cu(10nm)
 
 The coordinate system is define by:
 
-![](Images/coordinate system.png)
+![](Images/new_coord_sys.png)
 
 ## Files and necessities
 This project consists of multiple files each with their purpose:
