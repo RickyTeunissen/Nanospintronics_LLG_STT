@@ -9,7 +9,7 @@ If one wants a specific functionalaty, please use one of the files belonging to 
 # import scipy
 # import time
 import cProfile
-from faster_LLG_solver import *
+from LLG_solver import *
 
 
 # # just some test stuff, can later all be removed
@@ -54,7 +54,7 @@ def example_runner():
     M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 100e-9, 1e-12)
+    t = np.arange(0, 200e-9, 1e-12)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface)
