@@ -33,7 +33,7 @@ def LineAnalysis(inputDictionary):
         choiceList = [1, 2, 3, 2, 5]  # P, OPP, IPP, OPP, AP
         conditionList = [x >= 0.8, 0.2 <= x < 0.8, -0.2 < x < 0.2, -0.8 < x <= -0.2, x <= -0.8]
         categorizedValues = np.select(conditionList, choiceList)
-        resultDictionary.update({J: x})
+        resultDictionary.update({J: categorizedValues})
     return resultDictionary
 
 
@@ -87,15 +87,16 @@ m0 = np.array([1, 0, 0])
 M3d = np.array([1, 0, 0])
 
 # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-t = np.arange(0, 5e-9, 5e-12)
-gridSize = 50
+t = np.arange(0, 7e-9, 5e-12)
+gridSize = 25
 Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
 HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
 HextY = np.linspace(0, 0, gridSize)  # [A/m]
 HextZ = np.linspace(0, 0, gridSize)  # [A/m]
 HextArray = np.dstack([HextX, HextY, HextZ])
 
-skipLength1 = int(np.floor(len(t) * (3 / 4)))
+# Skip a fraction of the time, to ensure we take the more steady state ish result
+skipLength1 = int(np.floor(len(t) * (2 / 4)))
 inspectionT = t[skipLength1:]
 
 
