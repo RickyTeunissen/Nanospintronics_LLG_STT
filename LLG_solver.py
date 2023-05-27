@@ -12,7 +12,7 @@ import scipy.constants as constants
 import scipy.special
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import MultipleLocator
-from math import sqrt
+from math import sqrt, floor
 
 # Defining relevant physical constants.
 mu0: float = constants.mu_0  # [N/A^2]
@@ -23,8 +23,24 @@ gyro_ratio: float = 2 * charge / (2 * me)  # [A/m]
 kb: float = constants.Boltzmann  # [m^2 kg S^-2 K^-1]
 
 
+def better_cross(a, b):
+    """
+    calculates the cross product, but without the overhead that numpy has
+
+    NOTE: both vectors MUST be 3d else this function will be wrong!
+    :param a: np.array 3x1
+    :param b: np.array 3x1
+    :return: c = a cross b
+
+    """
+    cx = a[1] * b[2] - a[2] * b[1]
+    cy = a[2] * b[0] - a[0] * b[2]
+    cz = a[0] * b[1] - a[1] * b[0]
+    return np.array([cx, cy, cz])
+
+
 def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np.array, current_time: float,
-                         t_stepsize: float,demag_tens:np.array,K_surf:float, thickness:float) -> tuple:
+                         t_stepsize: float, demag_tens: np.array, K_surf: float, thickness: float) -> tuple:
     """
     Calculates the effective field based on a given state of the system.
     Takes into account:
@@ -46,17 +62,17 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     # Still add magnetocrystalline ani, maybe even T dep?:
 
     # we use thin films, these have a demagnetization field:
-    H_demag = -Ms*demag_tens*m3d
+    H_demag = -Ms * demag_tens * m3d
 
     # additional contribution due to temperature fluctuations first calculate in which step we are (s.t. in same t step
     # always pick same value if call this function > once)
-    step_index = np.floor(current_time / t_stepsize).astype(int)
+    step_index = floor(current_time / t_stepsize)
     H_temp = H_temp_array[step_index]
 
     # contribution by surface anistropy NOT YET CORRECT
-    #H_surf_ani = np.array([0, 0, 4*K_surf/(mu0*Ms*d)*m3d[2]**2])
+    # H_surf_ani = np.array([0, 0, 4*K_surf/(mu0*Ms*d)*m3d[2]**2])
 
-    Heff = Hext + H_demag + H_temp #+ H_surf_ani
+    Heff = Hext + H_demag + H_temp  # + H_surf_ani
 
     return Heff
 
@@ -82,17 +98,21 @@ def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: flo
 
     ### ALLL TOTALLY WRONGGG #########
     # spin transfer torque contribution
-    eta = 1 #how add?
-    pre = hbar/(2*charge*d*mu0*Ms)
-    spin_transfer_torque = 1 / (1 + alpha ** 2)*current*(-pre*np.cross(m3d, np.cross(m3d,M3d)) - alpha*pre*np.cross(m3d,np.cross(m3d, np.cross(m3d, M3d))))
-    #gyro_ratio / (mu0 * Ms) * eta * hbar / (2 * charge) * current / d * np.cross(m3d, np.cross(m3d, M3d))
+    eta = 1  # how add?
+    pre = hbar / (2 * charge * d * mu0 * Ms)
+    spin_transfer_torque = 1 / (1 + alpha ** 2) * current * (
+                -pre * better_cross(m3d, better_cross(m3d, M3d)) - alpha * pre * better_cross(m3d, better_cross(m3d,
+                                                                                                                better_cross(
+                                                                                                                    m3d,
+                                                                                                                    M3d))))
+    # gyro_ratio / (mu0 * Ms) * eta * hbar / (2 * charge) * current / d * np.cross(m3d, np.cross(m3d, M3d))
 
     total_torque = spin_transfer_torque
     return total_torque
 
 
 def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple,
-        H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf:float):
+        H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf: float):
     """
     returns the right hand side of the IMPLICIT LLG equation
 
@@ -113,23 +133,24 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
     """
 
     # renormalize m due to stochastic field (is sketchy but better then nothing)
-    m3d-= m3d - m3d/np.linalg.norm(m3d)
+    m3d -= m3d - m3d / sqrt(sum(m3d**2))
 
-    #calculate preceission + damping:
+    # calculate preceission + damping:
     Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize, demag_tensor, K_surf, d)
-    preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (np.cross(m3d, Heff) + alpha * np.cross(m3d, np.cross(m3d, Heff)))
+    preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (
+                better_cross(m3d, Heff) + alpha * better_cross(m3d, better_cross(m3d, Heff)))
 
     # calculate contribution normal spin transfer torque (look my notes if wanna add eta)
-    pre = -J/charge*gyro_ratio*hbar/(2*Ms*d)*1/(1+alpha**2)
-    spinTorque = pre*(np.cross(m3d, np.cross(m3d, M3d)) - alpha*np.cross(m3d, M3d))
+    pre = -J / charge * gyro_ratio * hbar / (2 * Ms * d) * 1 / (1 + alpha ** 2)
+    spinTorque = pre * (better_cross(m3d, better_cross(m3d, M3d)) - alpha * better_cross(m3d, M3d))
 
     dmx, dmy, dmz = preces_damp + spinTorque
 
-    return dmx, dmy ,dmz
+    return dmx, dmy, dmz
 
 
 def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, Ms: float, J: float, thickness: float,
-               width_x: float,width_y:float, temp: float, M3d: np.array, K_surf: float) -> tuple:
+               width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float) -> tuple:
     """
     Solves the LLG equation for given IC and parameters in the time range t_points
 
@@ -163,7 +184,7 @@ def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, M
     demag_tensor = np.array([Nx, Ny, Nz])  # to test: print(demag_tensor, np.sum(demag_tensor))
 
     # precompute random field array due to temperature:
-    vol = np.pi*a*b*thickness
+    vol = np.pi * a * b * thickness
     H_temp_std = sqrt(2 * kb * alpha * temp / (mu0 * Ms ** 2 * vol) / t_step_size)
     H_temp_arr = np.random.normal(0, H_temp_std, [t_points.shape[0], 3])  # gives array(meas points, 3) for all H terms
 
@@ -192,12 +213,12 @@ def polarToCartesian(r: float, theta: float, phi: float) -> np.array:
 
 
 def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array):
-    f = plt.figure(1,figsize=(8,7))
+    f = plt.figure(1, figsize=(8, 7))
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-", lw=0.3)
-    last_part = np.floor(mz.shape[0]*0.05).astype(int) # draw last 5% green to show e.g. stable orbit shape
-    axf.plot(mx[-last_part:],my[-last_part:], mz[-last_part:], color = "lime", lw=2)
-    axf.scatter(m0[0], m0[1], m0[2], color="red", lw=3) # startpoint
+    last_part = np.floor(mz.shape[0] * 0.05).astype(int)  # draw last 5% green to show e.g. stable orbit shape
+    axf.plot(mx[-last_part:], my[-last_part:], mz[-last_part:], color="lime", lw=2)
+    axf.scatter(m0[0], m0[1], m0[2], color="red", lw=3)  # startpoint
     axf.set_xlabel("mx/Ms")
     axf.set_ylabel("my/Ms")
     axf.set_zlabel("mz/Ms")
@@ -230,7 +251,7 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
 
     plt.figure(3)
     plt.title("unit vector lenght over time (for stability)")
-    plt.plot(np.sqrt(mz**2+mx**2+my**2))
+    plt.plot(np.sqrt(mz ** 2 + mx ** 2 + my ** 2))
 
     plt.show()
 
@@ -245,11 +266,11 @@ if __name__ == "__main__":
     Hext = np.array([-5.5e4, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    K_surface = 0.5e-3 # J/m^2
-    J = 0.2e12 # [A/m^2]
+    K_surface = 0.5e-3  # J/m^2
+    J = 0.2e12  # [A/m^2]
     d = 3e-9  # [m]
-    width_x = 130e-9 # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
-    width_y = 70e-9 # [m]
+    width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
+    width_y = 70e-9  # [m]
     temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
     # initial direction free layer and fixed layer
