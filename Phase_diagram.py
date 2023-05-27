@@ -1,6 +1,8 @@
 """
 Within this file, all the code necesarry for constructing phase diagrams will be implemented
 """
+import time
+
 import numpy as np
 import LLG_solver as LLG
 import matplotlib.pyplot as plt
@@ -8,7 +10,6 @@ import matplotlib.cm as cm
 from multiprocessing import Pool
 from functools import partial
 import os
-
 
 def SingleLine(m0: np.array, t_points: np.array, Hext: float, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int):
@@ -101,12 +102,19 @@ inspectionT = t[skipLength1:]
 
 
 if __name__ == '__main__':
+    start = time.time()
+    print("Starting calculation.....")
+
     try:
         pool = Pool(os.cpu_count())
         phaseDictionary = TotalDiagram(np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x,
                      width_y, temperature, M3d, K_surface, False, skipLength1, pool)
     finally:
         pool.close()
+
+        end=time.time()
+        print(f"process finished in {end-start} seconds")
+
         result = packagingForPlotting(phaseDictionary, gridSize)
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
 
