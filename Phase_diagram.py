@@ -3,12 +3,15 @@ Within this file, all the code necesarry for constructing phase diagrams will be
 """
 import time
 
+import istarmap
 import numpy as np
 import LLG_solver as LLG
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.colors import ListedColormap
 from multiprocessing import Pool
 from functools import partial
+from tqdm import tqdm
 import os
 
 def SingleLine(m0: np.array, t_points: np.array, Hext: float, alpha: float, Ms: float, thickness: float,
@@ -30,10 +33,15 @@ def LineAnalysis(inputDictionary):
     resultDictionary = {}
     for J, values in inputDictionary.items():
         mz = values[2]
-        x = np.average(mz).round(2)
-        choiceList = [1, 2, 3, 2, 5]  # P, OPP, IPP, OPP, AP
-        conditionList = [x >= 0.8, 0.2 <= x < 0.8, -0.2 < x < 0.2, -0.8 < x <= -0.2, x <= -0.8]
-        categorizedValues = np.select(conditionList, choiceList)
+        z = np.average(mz).round(2)
+        mx = values[0]
+        x = np.average(mx).round(2)
+        conditionListz = [z > 0.1 or z < -0.1, -0.1 <= z <= 0.1]  # OPP, IPP
+        conditionListx = [x > 0.9, -0.9 <= x < 0.9, x < -0.9]  # AntiParallel, Precession, Parallel
+        stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1], conditionListx[1] and conditionListz[0], conditionListx[2]]  # AP, IPP, OPP, P
+
+        choiceList = [1, 2, 3, 4]  # P, IPP, OPP, AP
+        categorizedValues = np.select(stateConditionList, choiceList)
         resultDictionary.update({J: categorizedValues})
     return resultDictionary
 
@@ -41,24 +49,26 @@ def LineAnalysis(inputDictionary):
 def SweepH(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float, width_x: float,
         width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, totLength: float,
            HextX: float, HextY: float, HextZ: float):
-    global progress
     result = SingleLine(
         m0, t_points, HextX, alpha, Ms, thickness, width_x, width_y, temp, M3d, K_surf, useMemory, skipLength)
     analyzedResult = LineAnalysis(result)
     # phaseDiagramDictionary.update({Hext[0]: analyzedResult})
-    progress += 1
-    print(f"\r Working on step {progress}/{totLength} of the field", end="")
     return analyzedResult
 
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
         width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, pool):
+
     totLength = len(HextArray[0])
     partialSweepH = partial(SweepH, m0, t_points, alpha, Ms, thickness, width_x,
                             width_y, temp, M3d, K_surf, useMemory, skipLength, totLength)
-    results = pool.starmap(partialSweepH, [x for x in HextArray][0].tolist())
+    HfieldArguments = [x for x in HextArray][0].tolist()
 
-    print("\n finished with the field")
+    print("mapping ...")
+    resultsIterable = tqdm(pool.istarmap(partialSweepH, HfieldArguments), total=len(HfieldArguments))
+    print("running ...")
+    results = tuple(resultsIterable)
+    print("done")
     return results
 
 
@@ -72,8 +82,6 @@ def packagingForPlotting(inputList, gridSize: int):
     return stateArray
 
 
-global progress
-progress = 0
 # defining relevant system parameters:
 alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
 Ms = 1.27e6  # [A/m]
@@ -89,7 +97,7 @@ M3d = np.array([1, 0, 0])
 
 # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
 t = np.arange(0, 7e-9, 5e-12)
-gridSize = 25
+gridSize = 50
 Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
 HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
 HextY = np.linspace(0, 0, gridSize)  # [A/m]
@@ -112,15 +120,37 @@ if __name__ == '__main__':
     finally:
         pool.close()
 
-        end=time.time()
+        end = time.time()
         print(f"process finished in {end-start} seconds")
 
         result = packagingForPlotting(phaseDictionary, gridSize)
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
+        flat_list = [item for sublist in result for item in sublist]
+        levels = len(set(flat_list)) - 1
+
+        # colors = ['LightGray', 'Gray', 'DarkGray', 'DimGray']
+        # colors = ['LightCoral', 'IndianRed', 'FireBrick', 'DarkRed']
+        colors = ['DodgerBlue', 'LimeGreen', 'Goldenrod', 'MediumPurple']
+
+        cmap = ListedColormap(colors)
+
+        fig3 = plt.figure(figsize=(6, 6))
+        plt.contour(result, levels=[1, 2, 3, 4], alpha=1, colors='black', linewidths=6)
+        plt.xticks([])
+        plt.yticks([])
 
         fig2 = plt.figure(figsize=(6, 6))
-        plt.pcolormesh(X, Y, result, cmap=cm.Blues, )
+        plt.pcolormesh(X, Y, result, cmap=cmap, )
         plt.colorbar()
+        legend_elements = [
+            plt.Rectangle((0, 0), 1, 1, color=colors[0], label='AP'),
+            plt.Rectangle((0, 0), 1, 1, color=colors[1], label='IPP'),
+            plt.Rectangle((0, 0), 1, 1, color=colors[2], label='OPP'),
+            plt.Rectangle((0, 0), 1, 1, color=colors[3], label='P')
+        ]
+
+        # Add the legend
+        plt.legend(handles=legend_elements)
 
         plt.show()
 
