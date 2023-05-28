@@ -7,6 +7,7 @@ import istarmap
 import numpy as np
 import LLG_solver as LLG
 import matplotlib.pyplot as plt
+import scipy.constants as constants
 import matplotlib.cm as cm
 from matplotlib.colors import ListedColormap
 from multiprocessing import Pool
@@ -15,7 +16,8 @@ from tqdm import tqdm
 import os
 
 def SingleLine(m0: np.array, t_points: np.array, Hext: float, alpha: float, Ms: float, thickness: float,
-               width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int):
+               width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool,
+               skipLength: int):
     resultDictionary = {}
 
     for index, J in enumerate(Jarray):
@@ -23,7 +25,8 @@ def SingleLine(m0: np.array, t_points: np.array, Hext: float, alpha: float, Ms: 
         if useMemory & index > 0:
             m0 = np.array([mx[-1], my[-1], mz[-1]])
         HextFinal = np.array([Hext, 0, 0])
-        mx, my, mz = LLG.LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x, width_y, temp, M3d, K_surf)
+        mx, my, mz = LLG.LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x, width_y, temp, M3d,
+                                    K_surf)
         inspectMx, inspectMy, inspectMz = mx[skipLength:], my[skipLength:], mz[skipLength:]
         resultDictionary.update({J: [inspectMx, inspectMy, inspectMz]})
     return resultDictionary
@@ -38,7 +41,8 @@ def LineAnalysis(inputDictionary):
         x = np.average(mx).round(2)
         conditionListz = [z > 0.1 or z < -0.1, -0.1 <= z <= 0.1]  # OPP, IPP
         conditionListx = [x > 0.9, -0.9 <= x < 0.9, x < -0.9]  # AntiParallel, Precession, Parallel
-        stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1], conditionListx[1] and conditionListz[0], conditionListx[2]]  # AP, IPP, OPP, P
+        stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1],
+                              conditionListx[1] and conditionListz[0], conditionListx[2]]  # AP, IPP, OPP, P
 
         choiceList = [1, 2, 3, 4]  # P, IPP, OPP, AP
         categorizedValues = np.select(stateConditionList, choiceList)
@@ -47,7 +51,8 @@ def LineAnalysis(inputDictionary):
 
 
 def SweepH(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float, width_x: float,
-        width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, totLength: float,
+           width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int,
+           totLength: float,
            HextX: float, HextY: float, HextZ: float):
     result = SingleLine(
         m0, t_points, HextX, alpha, Ms, thickness, width_x, width_y, temp, M3d, K_surf, useMemory, skipLength)
@@ -55,10 +60,11 @@ def SweepH(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness:
     # phaseDiagramDictionary.update({Hext[0]: analyzedResult})
     return analyzedResult
 
+
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
-        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, pool):
-
+        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int,
+        pool):
     totLength = len(HextArray[0])
     partialSweepH = partial(SweepH, m0, t_points, alpha, Ms, thickness, width_x,
                             width_y, temp, M3d, K_surf, useMemory, skipLength, totLength)
@@ -97,7 +103,7 @@ M3d = np.array([1, 0, 0])
 
 # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
 t = np.arange(0, 7e-9, 5e-12)
-gridSize = 50
+gridSize = 10
 Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
 HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
 HextY = np.linspace(0, 0, gridSize)  # [A/m]
@@ -108,7 +114,6 @@ HextArray = np.dstack([HextX, HextY, HextZ])
 skipLength1 = int(np.floor(len(t) * (2 / 4)))
 inspectionT = t[skipLength1:]
 
-
 if __name__ == '__main__':
     start = time.time()
     print("Starting calculation.....")
@@ -116,12 +121,12 @@ if __name__ == '__main__':
     try:
         pool = Pool(os.cpu_count())
         phaseDictionary = TotalDiagram(np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x,
-                     width_y, temperature, M3d, K_surface, False, skipLength1, pool)
+                                       width_y, temperature, M3d, K_surface, False, skipLength1, pool)
     finally:
         pool.close()
 
         end = time.time()
-        print(f"process finished in {end-start} seconds")
+        print(f"process finished in {end - start} seconds")
 
         result = packagingForPlotting(phaseDictionary, gridSize)
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
@@ -152,16 +157,21 @@ if __name__ == '__main__':
         # Add the legend
         plt.legend(handles=legend_elements)
 
+        # rewrite the labels of the axis to be in Tesla
+        plt.yticks(ticks=plt.yticks()[0][1:-1], labels= np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+        plt.ylabel("$μ_0 H [T]$")
+        plt.xlabel("$J [A/m^2]$")
+
         plt.show()
 
-#phaseDictionary = TotalDiagram(
+# phaseDictionary = TotalDiagram(
 #    np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, False, skipLength1)
-#result = packagingForPlotting(phaseDictionary, gridSize)
+# result = packagingForPlotting(phaseDictionary, gridSize)
 
-#X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
+# X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
 
-#fig2 = plt.figure(figsize=(6, 6))
-#plt.pcolormesh(X, Y, result, cmap=cm.Blues, )
-#plt.colorbar()
+# fig2 = plt.figure(figsize=(6, 6))
+# plt.pcolormesh(X, Y, result, cmap=cm.Blues, )
+# plt.colorbar()
 
-#plt.show()
+# plt.show()
