@@ -44,10 +44,10 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
     resultDictionary = {}
     for index, J in enumerate(Jarray):
         # solving the system
-        if useMemory & index > 0:
-            m0 = np.array([mx[-1], my[-1], mz[-1]])
         HextFinal = np.array([HextX, HextY, HextZ])
         mx, my, mz = LLG.LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x, width_y, temp, M3d, K_surf)
+        if useMemory & index > 0:
+            m0 = np.array([mx[-1], my[-1], mz[-1]])
         inspectMx, inspectMy, inspectMz = mx[skipLength:], my[skipLength:], mz[skipLength:]
         resultDictionary.update({J: [inspectMx, inspectMy, inspectMz]})
 
@@ -66,10 +66,10 @@ def LineAnalysis(inputDictionary):
     resultDictionary = {}
     for J, values in inputDictionary.items():
         mz = values[2]
-        z = np.average(mz).round(2)
+        z = np.average(mz).round(3)
         mx = values[0]
-        x = np.average(mx).round(2)
-        conditionListz = [z > 0.1 or z < -0.1, -0.1 <= z <= 0.1]  # OPP, IPP
+        x = np.average(mx).round(3)
+        conditionListz = [z > 0.05 or z < -0.05, -0.05 <= z <= 0.05]  # OPP, IPP
         conditionListx = [x > 0.9, -0.9 <= x < 0.9, x < -0.9]  # AntiParallel, Precession, Parallel
         stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1], conditionListx[1] and conditionListz[0], conditionListx[2]]  # AP, IPP, OPP, P
 
@@ -139,7 +139,7 @@ if __name__ == '__main__':
     # defining relevant system parameters:
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    K_surface = 0.5e-3  # J/m^2
+    K_surface = 0.0e-3  # J/m^2
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
