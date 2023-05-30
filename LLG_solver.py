@@ -69,10 +69,10 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     step_index = floor(current_time / t_stepsize)
     H_temp = H_temp_array[step_index]
 
-    # contribution by surface anistropy NOT YET CORRECT
-    # H_surf_ani = np.array([0, 0, 4*K_surf/(mu0*Ms*d)*m3d[2]**2])
+    # contribution by surface anistropy
+    H_surf_ani = np.array([0, 0, 4*K_surf/(mu0*Ms*thickness)*(1-m3d[2]**2)])
 
-    Heff = Hext + H_demag + H_temp  # + H_surf_ani
+    Heff = Hext + H_demag + H_temp + H_surf_ani
 
     return Heff
 
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     Hext = np.array([-5.5e4, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    K_surface = 0.5e-3  # J/m^2
+    K_surface = 0.0005 #0.5e-3  # J/m^2
     J = 0.2e12  # [A/m^2]
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
