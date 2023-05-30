@@ -7,7 +7,6 @@ import istarmap
 import numpy as np
 import LLG_solver as LLG
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from matplotlib.colors import ListedColormap
 from multiprocessing import Pool
 from functools import partial
@@ -18,7 +17,7 @@ import scipy.constants as constants
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float,
-               useMemory: bool, skipLength: int, HextX: float, HextY: float, HextZ: float):
+               useMemory: bool, skipLength: int, Jarray: np.array, HextX: float, HextY: float, HextZ: float):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -34,6 +33,7 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
         :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
         :param useMemory: boolean whether to use magnetic history
         :param skipLength: the amount of entries that must be skipped from the results
+        :param Jarray: an array of the applied current values
         :param HextX: The externally applied field in [A/m] in the x direction
         :param HextY: The externally applied field in [A/m] in the y direction
         :param HextZ: The externally applied field in [A/m] in the z direction
@@ -56,6 +56,13 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
 
 
 def LineAnalysis(inputDictionary):
+    """
+        Takes the average of mx and mz and categorizes the state based on those averages.
+
+        :param inputDictionary: The raw LLG results with as key the current and value [mx, my, mz]
+
+        :returns: The categorized LLG results with as key the current and value [state]
+    """
     resultDictionary = {}
     for J, values in inputDictionary.items():
         mz = values[2]
@@ -73,7 +80,7 @@ def LineAnalysis(inputDictionary):
 
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
-        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, pool):
+        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, pool, Jarray: np.array):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -91,12 +98,13 @@ def TotalDiagram(
         :param useMemory: boolean whether to use magnetic history
         :param skipLength: the amount of entries that must be skipped from the results
         :param pool: The multiprocessor pool
+        :param Jarray: an array of the applied current values
 
-        :returns: A tuple of the complete phase diagram, with each entry 1 sweep over the current.
+        :returns: A tuple of the complete phase diagram, with each entry the dictionary over the current.
     """
 
     partialSweepH = partial(SingleLine, m0, t_points, alpha, Ms, thickness, width_x,
-                            width_y, temp, M3d, K_surf, useMemory, skipLength)
+                            width_y, temp, M3d, K_surf, useMemory, skipLength, Jarray)
     HfieldArguments = [x for x in HextArray][0].tolist()
 
     print("mapping ...")
@@ -107,9 +115,19 @@ def TotalDiagram(
     return results
 
 
-def packagingForPlotting(inputList, gridSize: int):
+def packagingForPlotting(inputDictionaryTuple: tuple, gridSize: int):
+    """
+        Unpacks the tuple of dictionaries into a list of lists.
+
+        :param inputDictionaryTuple: A tuple with each entry a dictionary of the current at 1 field strength
+        Each dictionary has as key the current and value the state [state]
+        :param gridSize: The gridsize of the phase diagram
+
+        :returns: A list of lists, with each entry a sweep over the current at a specific field strength.
+    """
+
     stateArray = np.zeros((gridSize, gridSize))
-    for index, currentDictionary in enumerate(inputList):
+    for index, currentDictionary in enumerate(inputDictionaryTuple):
         currentArray = []
         for current, state in currentDictionary.items():
             currentArray.append(state.tolist())
@@ -117,58 +135,53 @@ def packagingForPlotting(inputList, gridSize: int):
     return stateArray
 
 
-# defining relevant system parameters:
-alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
-Ms = 1.27e6  # [A/m]
-K_surface = 0.5e-3  # J/m^2
-d = 3e-9  # [m]
-width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
-width_y = 70e-9  # [m]
-temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-
-# initial direction free layer and fixed layer
-m0 = np.array([1, 0, 0])
-M3d = np.array([1, 0, 0])
-
-# which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-t = np.arange(0, 7e-9, 5e-12)
-gridSize = 15
-Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
-HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
-HextY = np.linspace(0, 0, gridSize)  # [A/m]
-HextZ = np.linspace(0, 0, gridSize)  # [A/m]
-HextArray = np.dstack([HextX, HextY, HextZ])
-
-# Skip a fraction of the time, to ensure we take the more steady state ish result
-skipLength1 = int(np.floor(len(t) * (2 / 4)))
-inspectionT = t[skipLength1:]
-
-
 if __name__ == '__main__':
+    # defining relevant system parameters:
+    alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
+    Ms = 1.27e6  # [A/m]
+    K_surface = 0.5e-3  # J/m^2
+    d = 3e-9  # [m]
+    width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
+    width_y = 70e-9  # [m]
+    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+
+    # initial direction free layer and fixed layer
+    m0 = np.array([1, 0, 0])
+    M3d = np.array([1, 0, 0])
+
+    # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
+    t = np.arange(0, 7e-9, 5e-12)
+    gridSize = 50
+    Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
+    HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
+    HextY = np.linspace(0, 0, gridSize)  # [A/m]
+    HextZ = np.linspace(0, 0, gridSize)  # [A/m]
+    HextArray = np.dstack([HextX, HextY, HextZ])
+
+    # Skip a fraction of the time, to ensure we take the more steady state ish result
+    skipLength1 = int(np.floor(len(t) * (2 / 4)))
+    inspectionT = t[skipLength1:]
+
     start = time.time()
     print("Starting calculation.....")
 
     try:
         pool = Pool(os.cpu_count())
-        phaseDictionary = TotalDiagram(np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x,
-                     width_y, temperature, M3d, K_surface, False, skipLength1, pool)
+        phaseDictionaryTuple = TotalDiagram(np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x,
+                     width_y, temperature, M3d, K_surface, False, skipLength1, pool, Jarray)
     finally:
         pool.close()
 
         end = time.time()
         print(f"process finished in {end-start} seconds")
 
-        result = packagingForPlotting(phaseDictionary, gridSize)
+        result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
         flat_list = [item for sublist in result for item in sublist]
         levels = len(set(flat_list)) - 1
 
-        # colors = ['LightGray', 'Gray', 'DarkGray', 'DimGray']
-        # colors = ['LightCoral', 'IndianRed', 'FireBrick', 'DarkRed']
         # colors = ['DodgerBlue', 'LimeGreen', 'Goldenrod', 'MediumPurple']
         colors = ['#3fe522', '#6c38cc', '#d661ad', '#cb6934']
-        # colors = ['#dfd562', '#b0e16b', '#bdd73c', '#dcaf56']
-
 
         cmap = ListedColormap(colors)
 
