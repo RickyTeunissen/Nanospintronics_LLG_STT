@@ -15,19 +15,44 @@ from tqdm import tqdm
 import os
 import scipy.constants as constants
 
-def SingleLine(m0: np.array, t_points: np.array, Hext: float, alpha: float, Ms: float, thickness: float,
-               width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int):
-    resultDictionary = {}
 
+def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
+               width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float,
+               useMemory: bool, skipLength: int, HextX: float, HextY: float, HextZ: float):
+    """
+        Calculates the effective field based over a range of applied currents.
+
+        :param m0: 3d tuple for the unit vector of the magnetizaiton (mx,my,mz)
+        :param t_points: Array of time points at which we wanna evaluate the solution
+        :param alpha: damping constant
+        :param Ms: Saturation magnetizaion in [A/m]
+        :param thickness: thickness cylinder in [m]
+        :param width_x: total width cylinder in the longest direction [m]
+        :param width_y: total width cylinder in the smallest direction [m]
+        :param temp: temperature of system [K]
+        :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
+        :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
+        :param useMemory: boolean whether to use magnetic history
+        :param skipLength: the amount of entries that must be skipped from the results
+        :param HextX: The externally applied field in [A/m] in the x direction
+        :param HextY: The externally applied field in [A/m] in the y direction
+        :param HextZ: The externally applied field in [A/m] in the z direction
+
+        :returns: Dictionary of the analyzed results, categorized by state.
+    """
+
+    resultDictionary = {}
     for index, J in enumerate(Jarray):
         # solving the system
         if useMemory & index > 0:
             m0 = np.array([mx[-1], my[-1], mz[-1]])
-        HextFinal = np.array([Hext, 0, 0])
+        HextFinal = np.array([HextX, HextY, HextZ])
         mx, my, mz = LLG.LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x, width_y, temp, M3d, K_surf)
         inspectMx, inspectMy, inspectMz = mx[skipLength:], my[skipLength:], mz[skipLength:]
         resultDictionary.update({J: [inspectMx, inspectMy, inspectMz]})
-    return resultDictionary
+
+    analyzedResult = LineAnalysis(resultDictionary)
+    return analyzedResult
 
 
 def LineAnalysis(inputDictionary):
@@ -46,23 +71,32 @@ def LineAnalysis(inputDictionary):
         resultDictionary.update({J: categorizedValues})
     return resultDictionary
 
-
-def SweepH(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float, width_x: float,
-        width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, totLength: float,
-           HextX: float, HextY: float, HextZ: float):
-    result = SingleLine(
-        m0, t_points, HextX, alpha, Ms, thickness, width_x, width_y, temp, M3d, K_surf, useMemory, skipLength)
-    analyzedResult = LineAnalysis(result)
-    # phaseDiagramDictionary.update({Hext[0]: analyzedResult})
-    return analyzedResult
-
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
         width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, pool):
+    """
+        Calculates the effective field based over a range of applied currents.
 
-    totLength = len(HextArray[0])
-    partialSweepH = partial(SweepH, m0, t_points, alpha, Ms, thickness, width_x,
-                            width_y, temp, M3d, K_surf, useMemory, skipLength, totLength)
+        :param m0: 3d tuple for the unit vector of the magnetizaiton (mx,my,mz)
+        :param t_points: Array of time points at which we wanna evaluate the solution
+        :param HextArray: The externally applied field in [A/m] in the form [[x,y,z],[],...]
+        :param alpha: damping constant
+        :param Ms: Saturation magnetizaion in [A/m]
+        :param thickness: thickness cylinder in [m]
+        :param width_x: total width cylinder in the longest direction [m]
+        :param width_y: total width cylinder in the smallest direction [m]
+        :param temp: temperature of system [K]
+        :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
+        :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
+        :param useMemory: boolean whether to use magnetic history
+        :param skipLength: the amount of entries that must be skipped from the results
+        :param pool: The multiprocessor pool
+
+        :returns: A tuple of the complete phase diagram, with each entry 1 sweep over the current.
+    """
+
+    partialSweepH = partial(SingleLine, m0, t_points, alpha, Ms, thickness, width_x,
+                            width_y, temp, M3d, K_surf, useMemory, skipLength)
     HfieldArguments = [x for x in HextArray][0].tolist()
 
     print("mapping ...")
@@ -98,7 +132,7 @@ M3d = np.array([1, 0, 0])
 
 # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
 t = np.arange(0, 7e-9, 5e-12)
-gridSize = 10
+gridSize = 15
 Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
 HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
 HextY = np.linspace(0, 0, gridSize)  # [A/m]
@@ -131,7 +165,10 @@ if __name__ == '__main__':
 
         # colors = ['LightGray', 'Gray', 'DarkGray', 'DimGray']
         # colors = ['LightCoral', 'IndianRed', 'FireBrick', 'DarkRed']
-        colors = ['DodgerBlue', 'LimeGreen', 'Goldenrod', 'MediumPurple']
+        # colors = ['DodgerBlue', 'LimeGreen', 'Goldenrod', 'MediumPurple']
+        colors = ['#3fe522', '#6c38cc', '#d661ad', '#cb6934']
+        # colors = ['#dfd562', '#b0e16b', '#bdd73c', '#dcaf56']
+
 
         cmap = ListedColormap(colors)
 
@@ -159,15 +196,3 @@ if __name__ == '__main__':
         plt.xlabel("$J [A/m^2]$")
 
         plt.show()
-
-#phaseDictionary = TotalDiagram(
-#    np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, False, skipLength1)
-#result = packagingForPlotting(phaseDictionary, gridSize)
-
-#X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
-
-#fig2 = plt.figure(figsize=(6, 6))
-#plt.pcolormesh(X, Y, result, cmap=cm.Blues, )
-#plt.colorbar()
-
-#plt.show()
