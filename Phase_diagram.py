@@ -66,12 +66,12 @@ def LineAnalysis(inputDictionary):
     resultDictionary = {}
     for J, values in inputDictionary.items():
         mz = values[2]
-        z = np.average(mz).round(3)
+        z = np.average(mz)**3
         mx = values[0]
         x = np.average(mx).round(3)
-        conditionListz = [z > 0.05 or z < -0.05, -0.05 <= z <= 0.05]  # OPP, IPP
-        conditionListx = [x > 0.9, -0.9 <= x < 0.9, x < -0.9]  # AntiParallel, Precession, Parallel
-        stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1], conditionListx[1] and conditionListz[0], conditionListx[2]]  # AP, IPP, OPP, P
+        conditionListz = [z > 0.001 or z < -0.001, -0.001 <= z <= 0.001]  # OPP, IPP
+        conditionListx = [x > 0.9, -0.9 <= x < 0.9, x < -0.9]  # Parallel, Precession, AntiParallel
+        stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1], conditionListx[1] and conditionListz[0], conditionListx[2]]  # P, IPP, OPP, AP
 
         choiceList = [1, 2, 3, 4]  # P, IPP, OPP, AP
         categorizedValues = np.select(stateConditionList, choiceList)
@@ -109,7 +109,6 @@ def TotalDiagram(
 
     print("mapping ...")
     resultsIterable = tqdm(pool.istarmap(partialSweepH, HfieldArguments), total=len(HfieldArguments))
-    print("running ...")
     results = tuple(resultsIterable)
     print("done")
     return results
@@ -150,16 +149,16 @@ if __name__ == '__main__':
     M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 7e-9, 5e-12)
+    t = np.arange(0, 5e-9, 5e-12)
     gridSize = 50
-    Jarray = np.linspace(-0.5e12, 0.5e12, gridSize)
-    HextX = np.linspace(-5.5e4, 5.5e4, gridSize)  # [A/m]
+    Jarray = np.linspace(-0.5e12, 1.5e12, gridSize)
+    HextX = np.linspace(-6e4, 0e4, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
 
     # Skip a fraction of the time, to ensure we take the more steady state ish result
-    skipLength1 = int(np.floor(len(t) * (2 / 4)))
+    skipLength1 = int(np.floor(len(t) * (3 / 5)))
     inspectionT = t[skipLength1:]
 
     start = time.time()
@@ -167,7 +166,7 @@ if __name__ == '__main__':
 
     try:
         pool = Pool(os.cpu_count())
-        phaseDictionaryTuple = TotalDiagram(np.array([1, 0, 0]), t, HextArray, alpha, Ms, d, width_x,
+        phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x,
                      width_y, temperature, M3d, K_surface, False, skipLength1, pool, Jarray)
     finally:
         pool.close()
@@ -194,17 +193,17 @@ if __name__ == '__main__':
         plt.pcolormesh(X, Y, result, cmap=cmap, )
         plt.colorbar()
         legend_elements = [
-            plt.Rectangle((0, 0), 1, 1, color=colors[0], label='AP'),
+            plt.Rectangle((0, 0), 1, 1, color=colors[0], label='P'),
             plt.Rectangle((0, 0), 1, 1, color=colors[1], label='IPP'),
             plt.Rectangle((0, 0), 1, 1, color=colors[2], label='OPP'),
-            plt.Rectangle((0, 0), 1, 1, color=colors[3], label='P')
+            plt.Rectangle((0, 0), 1, 1, color=colors[3], label='AP')
         ]
 
         # Add the legend
         plt.legend(handles=legend_elements)
 
         # rewrite the labels of the axis to be in Tesla
-        plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+        # plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
         plt.ylabel("$μ_0 H [T]$")
         plt.xlabel("$J [A/m^2]$")
 

@@ -12,7 +12,7 @@ import scipy.constants as constants
 import scipy.special
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import MultipleLocator
-from math import sqrt, floor
+from math import sqrt, floor, sin
 
 # Defining relevant physical constants.
 mu0: float = constants.mu_0  # [N/A^2]
@@ -131,10 +131,10 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
     :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
     :return: (dmx,dmy,dmz)
     """
-
+    freq = 2*np.pi*5e7
     # renormalize m due to stochastic field (is sketchy but better then nothing)
     m3d -= m3d - m3d / sqrt(sum(m3d**2))
-
+    Josci = J*sin(freq*t)
     # calculate preceission + damping:
     Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize, demag_tensor, K_surf, d)
     preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (
@@ -216,7 +216,7 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     f = plt.figure(1, figsize=(8, 7))
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-", lw=0.3)
-    last_part = np.floor(mz.shape[0] * 0.05).astype(int)  # draw last 5% green to show e.g. stable orbit shape
+    last_part = np.floor(mz.shape[0] * 0.2).astype(int)  # draw last 5% green to show e.g. stable orbit shape
     axf.plot(mx[-last_part:], my[-last_part:], mz[-last_part:], color="lime", lw=2)
     axf.scatter(m0[0], m0[1], m0[2], color="red", lw=3)  # startpoint
     axf.set_xlabel("mx/Ms")
@@ -263,11 +263,11 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-5.5e4, 0, 0])  # [A/m]
+    Hext = np.array([-5e4, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    K_surface = 0.0005 #0.5e-3  # J/m^2
-    J = 0.2e12  # [A/m^2]
+    K_surface = 0.0005  #0.5e-3  # J/m^2
+    J = 0.25e12  # [A/m^2]
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -278,11 +278,15 @@ if __name__ == "__main__":
     M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 10e-9, 1e-12)
+    t = np.arange(0, 5e-9, 5e-12)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface)
-
+    skipLength = int(np.floor(len(t.copy()) * (3 / 5)))
+    print(np.average(mx[skipLength:]))
+    print("mz")
+    print(np.average(mz[skipLength:])**3)
+    print(np.average(mz[skipLength:]**3))
     end = time.time()
     print(f"Code ran in {end - start} seconds")
 
