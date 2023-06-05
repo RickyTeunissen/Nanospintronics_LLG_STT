@@ -138,7 +138,7 @@ if __name__ == '__main__':
     # defining relevant system parameters:
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
-    K_surface = 0.0e-3  # J/m^2
+    K_surface = 0.5e-3  # J/m^2
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -203,7 +203,7 @@ if __name__ == '__main__':
         plt.legend(handles=legend_elements)
 
         # rewrite the labels of the axis to be in Tesla
-        # plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+        plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
         plt.ylabel("$μ_0 H [T]$")
         plt.xlabel("$J [A/m^2]$")
 
