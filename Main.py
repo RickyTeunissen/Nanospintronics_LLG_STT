@@ -9,6 +9,8 @@ If one wants a specific functionalaty, please use one of the files belonging to 
 # import scipy
 # import time
 import cProfile
+import math
+
 from LLG_solver import *
 
 
@@ -44,6 +46,7 @@ def example_runner():
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
     J = 0.2e12  # [A/m^2]
+    freq = 2 * np.pi * 5e7
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -57,7 +60,7 @@ def example_runner():
     t = np.arange(0, 200e-9, 1e-12)
 
     # solving the system
-    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface, lambda t: sin(freq*t))
 
 
 # plotResult(mx, my, mz, m0, t)

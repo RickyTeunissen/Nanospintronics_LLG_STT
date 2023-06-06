@@ -82,7 +82,7 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     return Heff
 
 def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple,
-        H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf: float):
+        H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf: float, Jformula):
     """
     returns the right hand side of the IMPLICIT LLG equation
 
@@ -99,20 +99,19 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
     :param H_temp_array: array of random fields over time due to temperature (number timesteps)x3
     :param demag_tensor: array of all diagonal components of the demag tensor
     :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
+    :param Jformula: The lambda expression for the value of J.
     :return: (dmx,dmy,dmz)
     """
     m3d -= m3d - m3d / sqrt(sum(m3d ** 2))
 
-    freq = 2 * np.pi * 5e7
-
-    Josci = J * sin(freq * t)
+    Jtot = J * Jformula(t)
     # calculate preceission + damping:
     Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize, demag_tensor, K_surf, d)
     preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (
             better_cross(m3d, Heff) + alpha * better_cross(m3d, better_cross(m3d, Heff)))
 
     # calculate contribution normal spin transfer torque (look my notes if wanna add eta)
-    pre = -J / charge * gyro_ratio * hbar / (2 * Ms * d) * 1 / (1 + alpha ** 2)
+    pre = -Jtot / charge * gyro_ratio * hbar / (2 * Ms * d) * 1 / (1 + alpha ** 2)
     spinTorque = pre * (better_cross(m3d, better_cross(m3d, M3d)) - alpha * better_cross(m3d, M3d))
 
     dmx, dmy, dmz = preces_damp + spinTorque
@@ -121,7 +120,7 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
 
 
 def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, Ms: float, J: float, thickness: float,
-               width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float) -> tuple:
+               width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, Jformula) -> tuple:
     """
     Solves the LLG equation for given IC and parameters in the time range t_points
 
@@ -135,8 +134,9 @@ def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, M
     :param width_x: total width cylinder in longest direction [m]
     :param width_y: total width cylinder in smallest direction [m]
     :param temp: temperature of system [K]
-    :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
     :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
+    :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
+    :param Jformula: The lambda expression for the value of J.
 
     :return: unit vector m over time in
     """
@@ -161,7 +161,7 @@ def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, M
     H_temp_arr = np.random.normal(0, H_temp_std, [t_points.shape[0], 3])  # gives array(meas points, 3) for all H terms
 
     # solve the ODE
-    parameters = (Hext, alpha, Ms, J, thickness, M3d, H_temp_arr, t_step_size, demag_tensor, K_surf)
+    parameters = (Hext, alpha, Ms, J, thickness, M3d, H_temp_arr, t_step_size, demag_tensor, K_surf, Jformula)
     LLG_sol = solve_ivp(LLG, y0=IC, t_span=tspan, t_eval=t_points, args=parameters, method="RK45")
 
     # pack out solutions
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     t = np.arange(0, 5e-9, 5e-12)
 
     # solving the system
-    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface, lambda t: 1)
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")

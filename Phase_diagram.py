@@ -11,13 +11,14 @@ from matplotlib.colors import ListedColormap
 from multiprocessing import Pool
 from functools import partial
 from tqdm import tqdm
+from math import sin
 import os
 import scipy.constants as constants
 
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float,
-               useMemory: bool, skipLength: int, Jarray: np.array, HextX: float, HextY: float, HextZ: float):
+               useAC: bool, skipLength: int, Jarray: np.array, frequency: float, HextX: float, HextY: float, HextZ: float):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -31,9 +32,10 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
         :param temp: temperature of system [K]
         :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
         :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
-        :param useMemory: boolean whether to use magnetic history
+        :param useAC: boolean whether to use AC current
         :param skipLength: the amount of entries that must be skipped from the results
         :param Jarray: an array of the applied current values
+        :param frequency: The frequency of the AC oscillations
         :param HextX: The externally applied field in [A/m] in the x direction
         :param HextY: The externally applied field in [A/m] in the y direction
         :param HextZ: The externally applied field in [A/m] in the z direction
@@ -41,18 +43,45 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
         :returns: Dictionary of the analyzed results, categorized by state.
     """
 
+    if useAC:
+        Jformula = lambda t: sin(frequency * t)
+    else:
+        Jformula = lambda t: 1
+
     resultDictionary = {}
     for index, J in enumerate(Jarray):
         # solving the system
         HextFinal = np.array([HextX, HextY, HextZ])
-        mx, my, mz = LLG.LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x, width_y, temp, M3d, K_surf)
-        if useMemory & index > 0:
-            m0 = np.array([mx[-1], my[-1], mz[-1]])
+        mx, my, mz = LLG.LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x,
+                                    width_y, temp, M3d, K_surf, Jformula)
         inspectMx, inspectMy, inspectMz = mx[skipLength:], my[skipLength:], mz[skipLength:]
         resultDictionary.update({J: [inspectMx, inspectMy, inspectMz]})
 
-    analyzedResult = LineAnalysis(resultDictionary)
+    if useAC:
+        analyzedResult = LineAnalysisAC(resultDictionary)
+    else:
+        analyzedResult = LineAnalysis(resultDictionary)
+
     return analyzedResult
+
+
+def LineAnalysisAC(inputDictionary):
+    """
+        Takes the max of mx.
+
+        :param inputDictionary: The raw LLG results with as key the current and value [mx, my, mz]
+
+        :returns: The categorized LLG results with as key the current and value [state]
+    """
+    resultDictionary = {}
+    for J, values in inputDictionary.items():
+        mx = values[0]
+        my = values[1]
+        mz = values[2]
+        thetaX = np.arctan(np.sqrt(my**2 + mz**2)/mx)
+        thetaXmax = np.max(thetaX)*180/np.pi
+        resultDictionary.update({J: thetaXmax})
+    return resultDictionary
 
 
 def LineAnalysis(inputDictionary):
@@ -80,7 +109,8 @@ def LineAnalysis(inputDictionary):
 
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
-        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useMemory: bool, skipLength: int, pool, Jarray: np.array):
+        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useAC: bool,
+        skipLength: int, pool, Jarray: np.array, frequency: float):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -95,16 +125,17 @@ def TotalDiagram(
         :param temp: temperature of system [K]
         :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
         :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
-        :param useMemory: boolean whether to use magnetic history
+        :param useAC: boolean whether to use AC current
         :param skipLength: the amount of entries that must be skipped from the results
         :param pool: The multiprocessor pool
         :param Jarray: an array of the applied current values
+        :param frequency: The frequency of the AC oscillations
 
         :returns: A tuple of the complete phase diagram, with each entry the dictionary over the current.
     """
 
     partialSweepH = partial(SingleLine, m0, t_points, alpha, Ms, thickness, width_x,
-                            width_y, temp, M3d, K_surf, useMemory, skipLength, Jarray)
+                            width_y, temp, M3d, K_surf, useAC, skipLength, Jarray, frequency)
     HfieldArguments = [x for x in HextArray][0].tolist()
 
     print("mapping ...")
@@ -134,6 +165,57 @@ def packagingForPlotting(inputDictionaryTuple: tuple, gridSize: int):
     return stateArray
 
 
+def PhaseDiagramPlotDC(X, Y):
+
+    colors = ['#3fe522', '#6c38cc', '#d661ad', '#cb6934']
+
+    cmap = ListedColormap(colors)
+
+    fig3 = plt.figure(figsize=(6, 6))
+    plt.contour(result, levels=[1, 2, 3, 4], alpha=1, colors='black', linewidths=6)
+    plt.xticks([])
+    plt.yticks([])
+
+    fig2 = plt.figure(figsize=(6, 6))
+    plt.pcolormesh(X, Y, result, cmap=cmap, )
+    plt.colorbar()
+    legend_elements = [
+        plt.Rectangle((0, 0), 1, 1, color=colors[0], label='P'),
+        plt.Rectangle((0, 0), 1, 1, color=colors[1], label='IPP'),
+        plt.Rectangle((0, 0), 1, 1, color=colors[2], label='OPP'),
+        plt.Rectangle((0, 0), 1, 1, color=colors[3], label='AP')
+    ]
+
+    # Add the legend
+    plt.legend(handles=legend_elements)
+
+    # rewrite the labels of the axis to be in Tesla
+    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+    plt.ylabel("$μ_0 H [T]$")
+    plt.xlabel("$J [A/m^2]$")
+
+    plt.show()
+
+
+def PhaseDiagramPlotAC(X, Y):
+
+    fig3 = plt.figure(figsize=(6, 6))
+    plt.contour(result, alpha=1, colors='black', linewidths=6)
+    plt.xticks([])
+    plt.yticks([])
+
+    fig2 = plt.figure(figsize=(6, 6))
+    plt.pcolormesh(X, Y, result, cmap='hot')
+    plt.colorbar()
+
+    # rewrite the labels of the axis to be in Tesla
+    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+    plt.ylabel("$μ_0 H [T]$")
+    plt.xlabel("$J [A/m^2]$")
+
+    plt.show()
+
+
 if __name__ == '__main__':
     # defining relevant system parameters:
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
@@ -149,9 +231,11 @@ if __name__ == '__main__':
     M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 5e-9, 5e-12)
-    gridSize = 50
+    t = np.arange(0, 1e-9, 1e-12)
+    gridSize = 25
     Jarray = np.linspace(-0.5e12, 1.5e12, gridSize)
+    UseAcJ = True  #True = run AC special plotting too, False = good ol phase diagram
+    frequency = 2 * np.pi * 5e7
     HextX = np.linspace(-6e4, 0e4, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
@@ -167,7 +251,7 @@ if __name__ == '__main__':
     try:
         pool = Pool(os.cpu_count())
         phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x,
-                     width_y, temperature, M3d, K_surface, False, skipLength1, pool, Jarray)
+                     width_y, temperature, M3d, K_surface, UseAcJ, skipLength1, pool, Jarray, frequency)
     finally:
         pool.close()
 
@@ -176,35 +260,10 @@ if __name__ == '__main__':
 
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
-        flat_list = [item for sublist in result for item in sublist]
-        levels = len(set(flat_list)) - 1
 
-        # colors = ['DodgerBlue', 'LimeGreen', 'Goldenrod', 'MediumPurple']
-        colors = ['#3fe522', '#6c38cc', '#d661ad', '#cb6934']
+        if UseAcJ:
+            PhaseDiagramPlotAC(X, Y)
+        else:
+            PhaseDiagramPlotDC(X, Y)
 
-        cmap = ListedColormap(colors)
 
-        fig3 = plt.figure(figsize=(6, 6))
-        plt.contour(result, levels=[1, 2, 3, 4], alpha=1, colors='black', linewidths=6)
-        plt.xticks([])
-        plt.yticks([])
-
-        fig2 = plt.figure(figsize=(6, 6))
-        plt.pcolormesh(X, Y, result, cmap=cmap, )
-        plt.colorbar()
-        legend_elements = [
-            plt.Rectangle((0, 0), 1, 1, color=colors[0], label='P'),
-            plt.Rectangle((0, 0), 1, 1, color=colors[1], label='IPP'),
-            plt.Rectangle((0, 0), 1, 1, color=colors[2], label='OPP'),
-            plt.Rectangle((0, 0), 1, 1, color=colors[3], label='AP')
-        ]
-
-        # Add the legend
-        plt.legend(handles=legend_elements)
-
-        # rewrite the labels of the axis to be in Tesla
-        plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
-        plt.ylabel("$μ_0 H [T]$")
-        plt.xlabel("$J [A/m^2]$")
-
-        plt.show()
