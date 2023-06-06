@@ -78,7 +78,7 @@ def LineAnalysisAC(inputDictionary):
         mx = values[0]
         my = values[1]
         mz = values[2]
-        thetaX = np.arctan(np.sqrt(my**2 + mz**2)/mx)
+        thetaX = np.arctan2(np.sqrt(my**2 + mz**2), mx)
         thetaXmax = np.max(thetaX)*180/np.pi
         resultDictionary.update({J: thetaXmax})
     return resultDictionary
