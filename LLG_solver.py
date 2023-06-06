@@ -61,7 +61,8 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     :param thickness: thickness cylinder in [m]
     :return: Heff = (Heffx, Heffy, Heffz) = effective field in [A/m]
     """
-    # Still add magnetocrystalline ani, maybe even T dep?:
+
+    # Maybe add T dependent anisotropy
 
     # we use thin films, these have a demagnetization field:
     H_demag = -Ms * demag_tens * m3d
@@ -79,41 +80,6 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     Heff = Hext + H_demag + H_temp + H_surf_ani
 
     return Heff
-
-
-def calc_total_spin_torque(current: float, m3d: np.array, M3d: np.array, Ms: float, d: float, area: float,
-                           alpha: float):
-    """
-    Calcutes the total spin torque, includes:
-    - spin transfer torque
-    - spin pumpin (later)
-    - Current-induced effective field (later? but often negligible)
-
-    :param current: The current put through system [A]
-    :param m3d: unit vector representing the direction of M in the free layer [mx,my,mz]
-    :param M3d: unit vector representing the direction of M in the fixed layer [Mx,My,Mz]
-    :param Ms: saturation magentization [A/m]
-    :param d: thickness of sample [m]
-    :param area: area of sample [m^2]
-    :return: np.array([dmx, dmy, dmz]) due to spin torque
-    """
-    # if wanna add eta = ...
-    # need to use: STT = -J/e*gyro*hbar/(2*Ms*mu0*d)*eta*1/(1+alpha**2)*(m cross m cross M - alpha*m cross M)
-
-    ### ALLL TOTALLY WRONGGG #########
-    # spin transfer torque contribution
-    eta = 1  # how add?
-    pre = hbar / (2 * charge * d * mu0 * Ms)
-    spin_transfer_torque = 1 / (1 + alpha ** 2) * current * (
-            -pre * better_cross(m3d, better_cross(m3d, M3d)) - alpha * pre * better_cross(m3d, better_cross(m3d,
-                                                                                                            better_cross(
-                                                                                                                m3d,
-                                                                                                                M3d))))
-    # gyro_ratio / (mu0 * Ms) * eta * hbar / (2 * charge) * current / d * np.cross(m3d, np.cross(m3d, M3d))
-
-    total_torque = spin_transfer_torque
-    return total_torque
-
 
 def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple,
         H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf: float):
@@ -275,7 +241,7 @@ if __name__ == "__main__":
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = 0.15e12  # [A/m^2]
+    J = 0.1e12  # [A/m^2]
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -286,7 +252,7 @@ if __name__ == "__main__":
     M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 10e-9, 5e-14)
+    t = np.arange(0, 5e-9, 5e-12)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface)
