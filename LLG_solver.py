@@ -184,7 +184,7 @@ def polarToCartesian(r: float, theta: float, phi: float) -> np.array:
     return np.array([x, y, z])
 
 
-def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array):
+def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array,Jformula):
     f = plt.figure(1, figsize=(8, 7))
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-", lw=0.3)
@@ -205,7 +205,7 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     axf.set_ylim([-1, 1])
     axf.set_zlim([-1, 1])
 
-    fig2, ax = plt.subplots(3, 1, sharex=True)
+    fig2, ax = plt.subplots(4, 1, sharex=True)
     fig2.suptitle("Magnetization over time", fontweight="bold")
     ax[0].plot(t, mx, lw=0.6)
     ax[0].set_ylabel("mx/Ms")
@@ -219,7 +219,9 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     ax[2].set_ylabel("mz/Ms")
     ax[2].set_ylim([-1.1, 1.1])
     ax[2].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
-    ax[2].set_xlabel("time [s]")
+    ax[3].plot(t, list(map(Jformula, t)))
+    ax[3].set_xlabel("time [s]")
+    ax[3].set_ylabel("J $[A/m^2]$")
 
     plt.figure(3)
     plt.title("unit vector lenght over time (for stability)")
@@ -237,11 +239,11 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-5e4, 0, 0])  # [A/m]
+    Hext = np.array([0, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = 0.1e12  # [A/m^2]
+    J = -1e12  # [A/m^2]
     thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -254,10 +256,14 @@ if __name__ == "__main__":
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
     t = np.arange(0, 5e-9, 1e-12)
 
+    # defininf a custom current over time shape
+    #Jformula = lambda t: 1 #constant current pusle
+    Jformula = lambda t: sin(2 * np.pi * 1e9 * t)
+
     # solving the system
-    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface, lambda t: 1)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface, Jformula)
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")
 
-    plotResult(mx, my, mz, m0, t)
+    plotResult(mx, my, mz, m0, t, Jformula)
