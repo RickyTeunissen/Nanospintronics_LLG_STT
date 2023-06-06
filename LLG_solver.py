@@ -22,7 +22,7 @@ charge: float = constants.elementary_charge  # [C]
 gyro_ratio: float = 2 * charge / (2 * me)  # [A/m]
 kb: float = constants.Boltzmann  # [m^2 kg S^-2 K^-1]
 
-gyro_2 = 2.4e5  # paper in [m/As]
+gyro_co = 2.4e5  # Gyromagnetic ratio for Co, copied from DOI: 10.1103/PhysRevB.72.014446 in [m/As]
 
 
 def better_cross(a, b):
@@ -157,7 +157,7 @@ def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, M
     # precompute random field array due to temperature:
     vol = np.pi * a * b * thickness
     # H_temp_std = sqrt(2 * kb * alpha * temp / (mu0 * Ms ** 2 * vol) / t_step_size) WRONG FORM
-    H_temp_std = sqrt(2 * kb * alpha * temp / (mu0 * Ms * gyro_2 * vol * t_step_size))
+    H_temp_std = sqrt(2 * kb * alpha * temp / (mu0 * Ms * gyro_co * vol * t_step_size))
     H_temp_arr = np.random.normal(0, H_temp_std, [t_points.shape[0], 3])  # gives array(meas points, 3) for all H terms
 
     # solve the ODE
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
     J = 0.1e12  # [A/m^2]
-    d = 3e-9  # [m]
+    thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
     temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
@@ -252,10 +252,10 @@ if __name__ == "__main__":
     M3d = np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 5e-9, 5e-12)
+    t = np.arange(0, 5e-9, 1e-12)
 
     # solving the system
-    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, d, width_x, width_y, temperature, M3d, K_surface, lambda t: 1)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface, lambda t: 1)
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")
