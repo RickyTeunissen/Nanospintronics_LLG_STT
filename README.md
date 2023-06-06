@@ -34,9 +34,13 @@ Things which are included are:
 ## About the Files and using this code
 This project consists of multiple files each with their purpose, the most important ones are:
 - LLG_solver: contains all important functions for solving the LLG equation, can also be run on its own to investigate the dynamics at given input parameters
-- Phase_diagram.py: Can be run to create a phase diagram of the system. It does so by simulaating the LLG equation for various strenghts of the input current and field and after a while looking at the state the system is in. Alyternatively one can also set ... to TRUE to get a phase diagram showing the maximum angle achieved during the precession to e.g. investigate the effect of AC currents
+- Phase_diagram.py: Can be run to create a phase diagram of the system. It does so by simulaating the LLG equation for various strenghts of the input current and field and after a while looking at the state the system is in. Alyternatively one can also set ... to TRUE to get a phase diagram showing the maximum angle achieved during the precession to e.g. investigate the effect of AC currents 
 
+- ODE_solver examples.py: contains some nice examples of how ordenairy differential equaitions can be solved using the scipy.solve_ivp() function (nice for people unfamiliar with it)
+- istarmap.py: needed for bunching the input parameters when multiprocessing to minimize communication between precessors.
 
 other files we used for testing:
 - speed_test.py: can be run to analyse the time needed for any function and its subfunctions to run, nice for speed analysis
 - Temp_histogram: can be run to check whether the stochastic field will eventually produce a boltzman distribution, note that in order for this to work, we must MANUALLY set the demag_tensor to np.array([0,0,0]) in the LLG_solver 
+
+All needed libraries can be found in requirements.txt file
