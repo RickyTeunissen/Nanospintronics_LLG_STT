@@ -18,7 +18,7 @@ import scipy.constants as constants
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float,
-               useAC: bool, skipLength: int, Jarray: np.array, frequency: float, HextX: float, HextY: float, HextZ: float):
+               useAC: bool, skipLength: int, Jarray: np.array, frequency: float, HexNorm: np.array, HextX: float, HextY: float, HextZ: float):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -60,7 +60,7 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
     if useAC:
         analyzedResult = LineAnalysisAC(resultDictionary)
     else:
-        analyzedResult = LineAnalysis(resultDictionary)
+        analyzedResult = LineAnalysis(resultDictionary, M3d, HexNorm)
 
     return analyzedResult
 
@@ -84,7 +84,7 @@ def LineAnalysisAC(inputDictionary):
     return resultDictionary
 
 
-def LineAnalysis(inputDictionary):
+def LineAnalysis(inputDictionary, M3d: np.array, HexNorm: np.array):
     """
         Takes the average of mx and mz and categorizes the state based on those averages.
 
@@ -94,15 +94,18 @@ def LineAnalysis(inputDictionary):
     """
     resultDictionary = {}
     for J, values in inputDictionary.items():
-        mz = values[2]
-        z = np.average(mz)**3
-        mx = values[0]
+        (mx, my, mz) = (values[0], values[1], values[2])
+        y = np.average(my).round(3)
         x = np.average(mx).round(3)
-        conditionListz = [z > 0.001 or z < -0.001, -0.001 <= z <= 0.001]  # OPP, IPP
-        conditionListx = [x > 0.9, -0.9 <= x < 0.9, x < -0.9]  # Parallel, Precession, AntiParallel
-        stateConditionList = [conditionListx[0], conditionListx[1] and conditionListz[1], conditionListx[1] and conditionListz[0], conditionListx[2]]  # P, IPP, OPP, AP
+        (stdx, stdy, stdz) = (np.std(mx), np.std(my), np.std(mz))
+        conditionIPP = stdx > 0.1 and stdy > 0.1 and stdz > 0.1
+        conditionOPP = stdx > 0.1 and stdy > 0.1 and stdz < 0.1
+        conditionStableP = not conditionIPP and not conditionOPP and x > 0.95 and abs(y) < 0.5*abs(M3d[1])
+        conditionStableAP = not conditionIPP and not conditionOPP and x < -0.95 and abs(y) < 0.5*abs(M3d[1])
+        pinnedLayerAligned = not conditionStableAP and not conditionStableP
+        stateConditionList = [conditionStableP, conditionIPP, conditionOPP, conditionStableAP, pinnedLayerAligned]
 
-        choiceList = [1, 2, 3, 4]  # P, IPP, OPP, AP
+        choiceList = [0, 1, 2, 3, 4]  # P, IPP, OPP, AP, FLA
         categorizedValues = np.select(stateConditionList, choiceList)
         resultDictionary.update({J: categorizedValues})
     return resultDictionary
@@ -110,7 +113,7 @@ def LineAnalysis(inputDictionary):
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
         width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, useAC: bool,
-        skipLength: int, pool, Jarray: np.array, frequency: float):
+        skipLength: int, pool, Jarray: np.array, frequency: float, HexNorm: np.array):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -135,10 +138,9 @@ def TotalDiagram(
     """
 
     partialSweepH = partial(SingleLine, m0, t_points, alpha, Ms, thickness, width_x,
-                            width_y, temp, M3d, K_surf, useAC, skipLength, Jarray, frequency)
+                            width_y, temp, M3d, K_surf, useAC, skipLength, Jarray, frequency, HexNorm)
     HfieldArguments = [x for x in HextArray][0].tolist()
 
-    print("mapping ...")
     resultsIterable = tqdm(pool.istarmap(partialSweepH, HfieldArguments), total=len(HfieldArguments))
     results = tuple(resultsIterable)
     print("done")
@@ -167,12 +169,12 @@ def packagingForPlotting(inputDictionaryTuple: tuple, gridSize: int):
 
 def PhaseDiagramPlotDC(X, Y):
 
-    colors = ['#3fe522', '#6c38cc', '#d661ad', '#cb6934']
+    colors = ['#3fe522', '#6c38cc', '#d661ad', '#cb6934', 'black']
 
     cmap = ListedColormap(colors)
 
     fig3 = plt.figure(figsize=(6, 6))
-    plt.contour(result, levels=[1, 2, 3, 4], alpha=1, colors='black', linewidths=6)
+    plt.contour(result, levels=[1, 2, 3, 4, 5], alpha=1, colors='black', linewidths=6)
     plt.xticks([])
     plt.yticks([])
 
@@ -183,21 +185,22 @@ def PhaseDiagramPlotDC(X, Y):
         plt.Rectangle((0, 0), 1, 1, color=colors[0], label='P'),
         plt.Rectangle((0, 0), 1, 1, color=colors[1], label='IPP'),
         plt.Rectangle((0, 0), 1, 1, color=colors[2], label='OPP'),
-        plt.Rectangle((0, 0), 1, 1, color=colors[3], label='AP')
+        plt.Rectangle((0, 0), 1, 1, color=colors[3], label='AP'),
+        plt.Rectangle((0, 0), 1, 1, color=colors[4], label='FLA'),
     ]
 
     # Add the legend
     plt.legend(handles=legend_elements)
 
     # rewrite the labels of the axis to be in Tesla
-    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+    #plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
     plt.ylabel("$μ_0 H [T]$")
     plt.xlabel("$J [A/m^2]$")
 
     plt.show()
 
 
-def PhaseDiagramPlotAC(X, Y):
+def PhaseDiagramPlotAC(X, Y, title: str):
 
     fig3 = plt.figure(figsize=(6, 6))
     plt.contour(result, alpha=1, colors='black', linewidths=6)
@@ -209,9 +212,10 @@ def PhaseDiagramPlotAC(X, Y):
     plt.colorbar()
 
     # rewrite the labels of the axis to be in Tesla
-    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
+    #plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
     plt.ylabel("$μ_0 H [T]$")
     plt.xlabel("$J [A/m^2]$")
+    plt.title(title)
 
     plt.show()
 
@@ -224,21 +228,24 @@ if __name__ == '__main__':
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
-    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    temperature = 30  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
-    M3d = np.array([1, 0, 0])
+    M3d = LLG.polarToCartesian(1, np.pi/2, np.pi/6)  #np.array([1, 0, 0])
+    # M3d = LLG.polarToCartesian(1, np.pi / 2, 0)
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 1e-9, 1e-12)
-    gridSize = 25
+    t = np.arange(0, 5e-9, 5e-12)
+    gridSize = 150
     Jarray = np.linspace(-0.5e12, 1.5e12, gridSize)
-    UseAcJ = True  #True = run AC special plotting too, False = good ol phase diagram
-    frequency = 2 * np.pi * 5e7
-    HextX = np.linspace(-6e4, 0e4, gridSize)  # [A/m]
-    HextY = np.linspace(0, 0, gridSize)  # [A/m]
-    HextZ = np.linspace(0, 0, gridSize)  # [A/m]
+    UseAcJ = False  #True = run AC special plotting too, False = good ol phase diagram
+    frequency = 5.83e8
+    HexNorm = LLG.polarToCartesian(1, np.pi/2, 0)
+    HexSize = np.linspace(-6e4, 0e4, gridSize)
+    HextX = HexSize * HexNorm[0]  # [A/m]
+    HextY = HexSize * HexNorm[1]  # [A/m]
+    HextZ = HexSize * HexNorm[2]  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
 
     # Skip a fraction of the time, to ensure we take the more steady state ish result
@@ -251,7 +258,7 @@ if __name__ == '__main__':
     try:
         pool = Pool(os.cpu_count())
         phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x,
-                     width_y, temperature, M3d, K_surface, UseAcJ, skipLength1, pool, Jarray, frequency)
+                     width_y, temperature, M3d, K_surface, UseAcJ, skipLength1, pool, Jarray, frequency, HexNorm)
     finally:
         pool.close()
 
@@ -262,7 +269,7 @@ if __name__ == '__main__':
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
 
         if UseAcJ:
-            PhaseDiagramPlotAC(X, Y)
+            PhaseDiagramPlotAC(X, Y, str(frequency))
         else:
             PhaseDiagramPlotDC(X, Y)
 
