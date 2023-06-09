@@ -139,7 +139,7 @@ def PhaseDiagramPlot(X, Y, result):
     # plt.xticks([])
     # plt.yticks([])
     fig2 = plt.figure(figsize=(6, 6))
-    plt.pcolormesh(X, Y, result, cmap='hot')
+    plt.pcolormesh(X, Y, result, cmap='inferno')
     plt.colorbar()
 
     # rewrite the labels of the axis to be in Tesla
@@ -159,7 +159,7 @@ if __name__ == '__main__':
     width_x = 130e-9    # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9     # [m]
     temperature = 3     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    J = -0.05e-12        #[A/m^2]: current density amplitude
+    J = -0.1e-12        #[A/m^2]: current density amplitude
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
@@ -167,15 +167,15 @@ if __name__ == '__main__':
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
     t = np.arange(0, 1e-9, 1e-12)
-    gridSize = 10
-    f_array = np.linspace(1e8, 1e10, gridSize)
-    HextX = np.linspace(-4e4, 0e4, gridSize)  # [A/m]
+    gridSize = 30
+    f_array = np.linspace(0, 1e10, gridSize)
+    HextX = np.linspace(-9e3, -4.7e3, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
 
-    # Skip a fraction of the time, to ensure we take the more steady state ish result
-    skipLength1 = int(np.floor(len(t) * (3 / 5)))
+    # now don't need to skip, but look at all
+    skipLength1 = 0
     inspectionT = t[skipLength1:]
 
     start = time.time()
