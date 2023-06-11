@@ -12,7 +12,7 @@ from LLG_solver import *
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float,
-               skipLength: int, f_array: np.array, J:float, HextX: float, HextY: float, HextZ: float):
+                f_array: np.array, J:float, HextX: float, HextY: float, HextZ: float):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -27,7 +27,6 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
         :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
         :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
         :param useAC: boolean whether to use AC current
-        :param skipLength: the amount of entries that must be skipped from the results
         :param Jarray: an array of the applied current values
         :param frequency: The frequency of the AC oscillations
         :param HextX: The externally applied field in [A/m] in the x direction
@@ -38,7 +37,7 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
     """
 
     resultDictionary = {}
-    for index, freq in enumerate(f_array):
+    for freq in f_array:
 
         # new current SHAPE for this run (amplitude was predefined):
         Jformula = lambda t: sin(2 * np.pi * freq * t)
@@ -47,11 +46,10 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
         HextFinal = np.array([HextX, HextY, HextZ])
         mx, my, mz = LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x,
                                 width_y, temp, M3d, K_surf, Jformula)
-        inspectMx, inspectMy, inspectMz = mx[skipLength:], my[skipLength:], mz[skipLength:]
-        resultDictionary.update({J: [inspectMx, inspectMy, inspectMz]})
+
+        resultDictionary.update({freq: [mx, my, mz]})
 
     analyzedResult = LineAnalysisFreq(resultDictionary)
-
     return analyzedResult
 
 
@@ -64,7 +62,7 @@ def LineAnalysisFreq(inputDictionary):
     """
     resultDictionary = {}
     for freq, values in inputDictionary.items():
-        mx, my, mz = values[0], values[1], values[2]
+        mx, my, mz = values
 
         # calculate maximum angle w.r.t x axis reached:
         thetaX = np.arctan2(np.sqrt(my ** 2 + mz ** 2), mx)
@@ -77,8 +75,7 @@ def LineAnalysisFreq(inputDictionary):
 
 def TotalDiagram(
         m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
-        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float,
-        skipLength: int, pool, f_array: np.array, J:float):
+        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, pool, f_array: np.array, J:float):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -94,7 +91,6 @@ def TotalDiagram(
         :param M3d: tuple(Mx,My,Mz) = Unit vector, the magnetization of the fixed layer
         :param K_surf: surface anisotropy that wants sys to go OOP [J/m]
         :param useAC: boolean whether to use AC current
-        :param skipLength: the amount of entries that must be skipped from the results
         :param pool: The multiprocessor pool
         :param Jarray: an array of the applied current values
         :param frequency: The frequency of the AC oscillations
@@ -103,7 +99,7 @@ def TotalDiagram(
     """
 
     partialSweepH = partial(SingleLine, m0, t_points, alpha, Ms, thickness, width_x,
-                            width_y, temp, M3d, K_surf, skipLength, f_array, J)
+                            width_y, temp, M3d, K_surf, f_array, J)
     HfieldArguments = [x for x in HextArray][0].tolist()
 
     print("mapping ...")
@@ -134,13 +130,19 @@ def packagingForPlotting(inputDictionaryTuple: tuple, gridSize: int):
 
 
 def PhaseDiagramPlot(X, Y, result):
-    # fig3 = plt.figure(figsize=(6, 6))
-    # plt.contour(result, alpha=1, colors='black', linewidths=6)
-    # plt.xticks([])
-    # plt.yticks([])
+
     fig2 = plt.figure(figsize=(6, 6))
     plt.pcolormesh(X, Y, result, cmap='inferno')
     plt.colorbar()
+
+    # display value obtained within the cell (comment away if not wanted:
+    # for (x, y), value in np.ndenumerate(result):
+    #     xpos = X[x,y]
+    #     ypos = Y[x,y]
+    #     plt.text(xpos, ypos, f"{value:.0f}", va="center", ha="center",color = "grey" )
+
+    # also plot the kittel equation for comparison
+    plt.plot()
 
     # rewrite the labels of the axis to be in Tesla
     plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * 1e3*np.array(plt.yticks()[0][1:-1]), 1))
@@ -158,36 +160,32 @@ if __name__ == '__main__':
     d = 3e-9            # [m]
     width_x = 130e-9    # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9     # [m]
-    temperature = 3     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    J = -0.1e-12        #[A/m^2]: current density amplitude
+    temperature = 30     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    J = -0.2e12        #[A/m^2]: current density amplitude
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
-    M3d = polarToCartesian(1, np.pi / 2, 30 / 180 * np.pi)  # 30 degrees
+    M3d = polarToCartesian(1, np.pi / 2, 30 / 180 * np.pi)  # 30 degrees w.r.t. long axis
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
-    t = np.arange(0, 1e-9, 1e-12)
-    gridSize = 30
-    f_array = np.linspace(0, 1e10, gridSize)
-    HextX = np.linspace(-9e3, -4.7e3, gridSize)  # [A/m]
+    t = np.arange(0, 1e-9, 5e-12)
+    gridSize = 150
+    f_array = np.linspace(1e7, 1e9, gridSize)
+    HextX = np.linspace(-5e3, 0, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
-
-    # now don't need to skip, but look at all
-    skipLength1 = 0
-    inspectionT = t[skipLength1:]
 
     start = time.time()
     print("Starting calculation.....")
 
     try:
         pool = Pool(os.cpu_count() - 1)
-        phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, skipLength1, pool, f_array,J)
+        phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, pool, f_array,J)
     except Exception as e:
-        print(e)
+        print(e)    # catch an exception in case anything happens
     finally:
-        pool.close()
+        pool.close() # Be sure to in end close the pool!!! (computer won't like it else):
 
         end = time.time()
         print(f"process finished in {end - start} seconds")

@@ -5,6 +5,8 @@ Within this file, all functions relevant for solving the LLG ODE are present:
     torque, etc.
 """
 import time
+
+import numpy
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
@@ -12,7 +14,8 @@ import scipy.constants as constants
 import scipy.special
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import MultipleLocator
-from math import sqrt, floor, sin
+from math import sqrt, floor, sin, cos, ceil
+from scipy.fft import fft, fftfreq
 
 # Defining relevant physical constants.
 mu0: float = constants.mu_0  # [N/A^2]
@@ -76,10 +79,10 @@ def calc_effective_field(m3d: tuple, Hext: np.array, Ms: float, H_temp_array: np
     # H_surf_ani = np.array([0, 0, 4 * K_surf / (mu0 * Ms * thickness) * (1 - m3d[2] ** 2)])    WRONG
     H_surf_ani = np.array([0, 0, 4 * K_surf / (mu0 * Ms * thickness) * m3d[2]])
 
-
     Heff = Hext + H_demag + H_temp + H_surf_ani
 
     return Heff
+
 
 def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: float, M3d: tuple,
         H_temp_array: np.array, t_stepsize, demag_tensor: np.array, K_surf: float, Jformula):
@@ -140,7 +143,6 @@ def LLG_solver(IC: np.array, t_points: np.array, Hext: np.array, alpha: float, M
 
     :return: unit vector m over time in
     """
-
     tspan = [t_points[0], t_points[-1]]  # ODE solver needs to know t bounds in advance
     t_step_size = t_points[1] - t_points[0]
 
@@ -184,7 +186,7 @@ def polarToCartesian(r: float, theta: float, phi: float) -> np.array:
     return np.array([x, y, z])
 
 
-def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array,Jformula):
+def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.array, Jformula, J_amp):
     f = plt.figure(1, figsize=(8, 7))
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-", lw=0.3)
@@ -219,7 +221,7 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     ax[2].set_ylabel("mz/Ms")
     ax[2].set_ylim([-1.1, 1.1])
     ax[2].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
-    ax[3].plot(t, list(map(Jformula, t)))
+    ax[3].plot(t, np.multiply(J_amp, list(map(Jformula, t))))
     ax[3].set_xlabel("time [s]")
     ax[3].set_ylabel("J $[A/m^2]$")
 
@@ -228,6 +230,13 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     plt.plot(np.sqrt(mz ** 2 + mx ** 2 + my ** 2))
     plt.ylabel("Length unit vector")
     plt.xlabel("Timestep")
+
+    # plot fourier transform of mx
+    plt.figure(4)
+    t_step_size = t[1] - t[0]
+    xf = fftfreq(int((t_step_size + t[-1]) / t_step_size), t_step_size)
+    plt.plot(xf, np.abs(fft(my)))
+    plt.xlim([0, 2e10])
 
     plt.show()
 
@@ -239,31 +248,32 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([0, 0, 0])  # [A/m]
+    Hext = np.array([-1e3, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = -1e12  # [A/m^2]
+    J = -2e12  # [A/m^2]
     thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
-    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    temperature = 30  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
-    # initial direction free layer and fixed layer
+    # initial direction free layer and fixed layer respectively
     m0 = np.array([1, 0, 0])
-    M3d = np.array([1, 0, 0])
+    M3d = polarToCartesian(1, np.pi / 2, np.pi / 6)  # np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
     t = np.arange(0, 5e-9, 1e-12)
 
-    # defininf a custom current over time shape
-    #Jformula = lambda t: 1 #constant current pusle
-    Jformula = lambda t: sin(2 * np.pi * 1e9 * t)
+    # defininf a custom current over time shape (magnitude defined above)
+    #Jformula = lambda t: 1 # constant current pusle
+    Jformula = lambda t: sin(2 * np.pi * 7e9 * t)
 
     # solving the system
-    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface, Jformula)
+    mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface,
+                            Jformula)
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")
 
-    plotResult(mx, my, mz, m0, t, Jformula)
+    plotResult(mx, my, mz, m0, t, Jformula, J)
