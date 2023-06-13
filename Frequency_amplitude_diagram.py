@@ -49,11 +49,11 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
 
         resultDictionary.update({freq: [mx, my, mz]})
 
-    analyzedResult = LineAnalysisFreq(resultDictionary)
+    analyzedResult = LineAnalysisFreq(resultDictionary, M3d)
     return analyzedResult
 
 
-def LineAnalysisFreq(inputDictionary):
+def LineAnalysisFreq(inputDictionary, M3d):
     """
     :param inputDictionary: The raw LLG results with as key the current and value [mx, my, mz]
 
@@ -65,8 +65,12 @@ def LineAnalysisFreq(inputDictionary):
         mx, my, mz = values
 
         # calculate maximum angle w.r.t x axis reached:
-        thetaX = np.arctan2(np.sqrt(my ** 2 + mz ** 2), mx)
-        thetaXmax = np.max(thetaX) * 180 / np.pi
+        mArray = np.array(values).T
+        dotproduct = np.sum(mArray * M3d, axis=1)
+        magnitudem = np.linalg.norm(mArray, axis=1)
+        magnitudeM = np.linalg.norm(M3d)
+        angles = np.arccos(dotproduct / (magnitudeM * magnitudem))
+        thetaXmax = np.max(angles) * 180 / np.pi
 
         resultDictionary.update({freq: thetaXmax})
 
@@ -128,11 +132,22 @@ def packagingForPlotting(inputDictionaryTuple: tuple, gridSize: int):
         stateArray[index] = currentArray
     return stateArray
 
+def onclick(event, fig, ax, line_x, line_y):
+    if event.inaxes == ax:
+        x = event.xdata
+        y = event.ydata
+
+        line_x.append(x)
+        line_y.append(y)
+
+        ax.plot(x, y, 'ro')
+        fig.canvas.draw()
+
 
 def PhaseDiagramPlot(X, Y, result):
 
-    fig2 = plt.figure(figsize=(6, 6))
-    plt.pcolormesh(X, Y, result, cmap='inferno')
+    fig2, ax = plt.subplots(figsize=(6, 6))
+    plt.pcolormesh(X, Y, result, cmap='inferno', picker=5)
     plt.colorbar()
 
     # display value obtained within the cell (comment away if not wanted:
@@ -144,14 +159,20 @@ def PhaseDiagramPlot(X, Y, result):
     # also plot the kittel equation for comparison
     # H_used = np.abs(np.transpose(Y)[0])
     # f_kittel_res = gyro_co*np.sqrt(H_used*(H_used+Ms))/(2*np.pi)
-    # plt.plot(f_kittel_res,-H_used,lw = 1, color = "white")
+    # plt.plot(f_kittel_res, H_used, lw=1, color="white")
 
     # rewrite the labels of the axis to be in Tesla
     plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * 1e3*np.array(plt.yticks()[0][1:-1]), 1))
     plt.ylabel("$μ_0 H [mT]$")
     plt.xlabel("$Freq [Hz]$")
 
+    line_x = []
+    line_y = []
+
+    fig2.canvas.callbacks.connect('button_press_event', lambda event: onclick(event, fig2, ax, line_x, line_y))
     plt.show()
+    print("Line x-positions:", line_x)
+    print("Line y-positions:", line_y)
 
 
 if __name__ == '__main__':
@@ -162,8 +183,8 @@ if __name__ == '__main__':
     d = 3e-9            # [m]
     width_x = 130e-9    # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9     # [m]
-    temperature = 30     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    J = -0.2e12        #[A/m^2]: current density amplitude
+    temperature = 3     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    J = -1e11        #[A/m^2]: current density amplitude
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
@@ -171,9 +192,9 @@ if __name__ == '__main__':
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
     t = np.arange(0, 1e-9, 5e-12)
-    gridSize = 150
-    f_array = np.linspace(1e9, 5e9, gridSize)
-    HextX = np.linspace(-5e3, 0, gridSize)  # [A/m]
+    gridSize = 100
+    f_array = np.linspace(0.5e9, 8e9, gridSize)
+    HextX = np.linspace(-6e3, 50e3, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
@@ -194,7 +215,5 @@ if __name__ == '__main__':
 
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(f_array, HextX)  # Yes we also need to turn into meshgrid
-        print(X)
-        print(Y)
 
         PhaseDiagramPlot(X, Y, result)

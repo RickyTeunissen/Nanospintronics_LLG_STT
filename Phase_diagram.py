@@ -228,20 +228,20 @@ if __name__ == '__main__':
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
-    temperature = 30  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
     M3d = LLG.polarToCartesian(1, np.pi/2, np.pi/6)  #np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 5e-9, 5e-12)
-    gridSize = 30
-    Jarray = np.linspace(-0.5e12, 1.5e12, gridSize)
+    t = np.arange(0, 10e-9, 5e-12)
+    gridSize = 75
+    Jarray = np.linspace(-0.15e12, 0.15e12, gridSize)
     UseAcJ = False  #True = run AC special plotting too, False = good ol phase diagram
     frequency = 5.83e8
     HexNorm = LLG.polarToCartesian(1, np.pi/2, 0)
-    HexSize = np.linspace(-6e4, 0e4, gridSize)
+    HexSize = np.linspace(-1e4, 0.5e4, gridSize)
     HextX = HexSize * HexNorm[0]  # [A/m]
     HextY = HexSize * HexNorm[1]  # [A/m]
     HextZ = HexSize * HexNorm[2]  # [A/m]
