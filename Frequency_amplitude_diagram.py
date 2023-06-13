@@ -142,7 +142,9 @@ def PhaseDiagramPlot(X, Y, result):
     #     plt.text(xpos, ypos, f"{value:.0f}", va="center", ha="center",color = "grey" )
 
     # also plot the kittel equation for comparison
-    plt.plot()
+    # H_used = np.abs(np.transpose(Y)[0])
+    # f_kittel_res = gyro_co*np.sqrt(H_used*(H_used+Ms))/(2*np.pi)
+    # plt.plot(f_kittel_res,-H_used,lw = 1, color = "white")
 
     # rewrite the labels of the axis to be in Tesla
     plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * 1e3*np.array(plt.yticks()[0][1:-1]), 1))
@@ -170,7 +172,7 @@ if __name__ == '__main__':
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
     t = np.arange(0, 1e-9, 5e-12)
     gridSize = 150
-    f_array = np.linspace(1e7, 1e9, gridSize)
+    f_array = np.linspace(1e9, 5e9, gridSize)
     HextX = np.linspace(-5e3, 0, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
@@ -192,5 +194,7 @@ if __name__ == '__main__':
 
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(f_array, HextX)  # Yes we also need to turn into meshgrid
+        print(X)
+        print(Y)
 
         PhaseDiagramPlot(X, Y, result)

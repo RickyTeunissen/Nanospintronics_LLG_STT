@@ -27,6 +27,9 @@ kb: float = constants.Boltzmann  # [m^2 kg S^-2 K^-1]
 
 gyro_co = 2.4e5  # Gyromagnetic ratio for Co, copied from DOI: 10.1103/PhysRevB.72.014446 in [m/As]
 
+J_used = {}
+mode = 1
+
 
 def better_cross(a, b):
     """
@@ -107,7 +110,25 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
     """
     m3d -= m3d - m3d / sqrt(sum(m3d ** 2))
 
-    Jtot = J * Jformula(t)
+    mx, my, mz = m3d
+    thetaX = np.arctan2(np.sqrt(my ** 2 + mz ** 2), mx)
+    thetaXmax = np.max(thetaX) * 180 / np.pi
+
+    global mode
+    if 30<thetaXmax< 120 and mode !=3:
+        mode = 2
+    elif thetaXmax > 170:
+        mode = 3
+
+    if mode == 1:
+        Jtot = J * Jformula(t)
+    elif mode == 2:
+        Jtot = J*5
+    else:
+        Jtot = 0
+
+    J_used[t] = Jtot  # update if not yet existent or otherwise overwrite
+
     # calculate preceission + damping:
     Heff = calc_effective_field(m3d, Hext, Ms, H_temp_array, t, t_stepsize, demag_tensor, K_surf, d)
     preces_damp = (-gyro_ratio * mu0 / (1 + alpha ** 2)) * (
@@ -221,7 +242,9 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     ax[2].set_ylabel("mz/Ms")
     ax[2].set_ylim([-1.1, 1.1])
     ax[2].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
-    ax[3].plot(t, np.multiply(J_amp, list(map(Jformula, t))))
+
+    # plot current over time used
+    ax[3].plot(J_used.keys(), J_used.values())  # np.multiply(J_amp, list(map(Jformula, t))))
     ax[3].set_xlabel("time [s]")
     ax[3].set_ylabel("J $[A/m^2]$")
 
@@ -248,15 +271,15 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-1e3, 0, 0])  # [A/m]
+    Hext = np.array([-2e3, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = -2e12  # [A/m^2]
+    J = -0.15e12  # [A/m^2]
     thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
-    temperature = 30  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    temperature = 1  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
 
     # initial direction free layer and fixed layer respectively
     m0 = np.array([1, 0, 0])
@@ -266,8 +289,8 @@ if __name__ == "__main__":
     t = np.arange(0, 5e-9, 1e-12)
 
     # defininf a custom current over time shape (magnitude defined above)
-    # Jformula = lambda t: 1 # constant current pusle
-    Jformula = lambda t: sin(2 * np.pi * 2.4e9 * t)
+    #Jformula = lambda t: 5 # constant current pusle
+    Jformula = lambda t: sin(2 * np.pi * 2.49e9 * t)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface,
@@ -275,5 +298,7 @@ if __name__ == "__main__":
 
     end = time.time()
     print(f"Code ran in {end - start} seconds")
+
+    print(sum([J**2 for J in J_used])) # gebruikt dit NIET, is nog onzin aangezien Jused veel meerder tijden erin heeft zitten
 
     plotResult(mx, my, mz, m0, t, Jformula, J)

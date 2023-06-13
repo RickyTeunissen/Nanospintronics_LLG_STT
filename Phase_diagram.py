@@ -233,11 +233,10 @@ if __name__ == '__main__':
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
     M3d = LLG.polarToCartesian(1, np.pi/2, np.pi/6)  #np.array([1, 0, 0])
-    # M3d = LLG.polarToCartesian(1, np.pi / 2, 0)
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
     t = np.arange(0, 5e-9, 5e-12)
-    gridSize = 150
+    gridSize = 30
     Jarray = np.linspace(-0.5e12, 1.5e12, gridSize)
     UseAcJ = False  #True = run AC special plotting too, False = good ol phase diagram
     frequency = 5.83e8
