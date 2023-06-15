@@ -71,9 +71,6 @@ def LineAnalysisFreq(inputDictionary, M3d:np.array):
         angles = np.arccos(dotproduct / (magnitudeM * magnitudem))
         angle_fixed_max = np.max(angles) * 180 / np.pi
 
-        if angle_fixed_max>85:
-            angle_fixed_max = np.clip(angle_fixed_max,0,85)  #to not let 1 stray points destroy nice plot
-
         resultDictionary.update({freq: angle_fixed_max})
 
 
