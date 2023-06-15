@@ -1,6 +1,7 @@
 """
 Within this file, all the code necesarry for constructing phase diagrams will be implemented
 """
+import matplotlib.pyplot as plt
 import numpy as np
 import istarmap
 import os
@@ -13,7 +14,7 @@ from LLG_solver import *
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float,
-                f_array: np.array, J:float, HextX: float, HextY: float, HextZ: float):
+                f_array: np.array ,HextX:float, J):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -40,11 +41,14 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
     resultDictionary = {}
     for freq in f_array:
 
-        # new current SHAPE for this run (amplitude was predefined):
-        Jformula = lambda t: sin(2 * np.pi * freq * t)
+        if freq < f_array[int(f_array.size*0.1)]: # plot first few frequencies as if DC current s.t. later get idea
+            Jformula = lambda t:1
+        else:
+            # new current SHAPE for this run (amplitude was predefined):
+            Jformula = lambda t: sin(2 * np.pi * freq * t)
 
         # solving the system
-        HextFinal = np.array([HextX, HextY, HextZ])
+        HextFinal = np.array([HextX, 0, 0])
         mx, my, mz = LLG_solver(m0, t_points, HextFinal, alpha, Ms, J, thickness, width_x,
                                 width_y, temp, M3d, K_surf, Jformula)
 
@@ -71,8 +75,8 @@ def LineAnalysisFreq(inputDictionary, M3d:np.array):
         angles = np.arccos(dotproduct / (magnitudeM * magnitudem))
         angle_fixed_max = np.max(angles) * 180 / np.pi
 
-        if angle_fixed_max>85:
-            angle_fixed_max = np.clip(angle_fixed_max,0,85)  #to not let 1 stray points destroy nice plot
+        # if angle_fixed_max>85:
+        #     angle_fixed_max = np.clip(angle_fixed_max,0,85)  #to not let 1 stray points destroy nice plot
 
         resultDictionary.update({freq: angle_fixed_max})
 
@@ -88,8 +92,8 @@ def LineAnalysisFreq(inputDictionary, M3d:np.array):
 
 
 def TotalDiagram(
-        m0: np.array, t_points: np.array, HextArray: np.array, alpha: float, Ms: float, thickness: float,
-        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, pool, f_array: np.array, J:float):
+        m0: np.array, t_points: np.array, HextX, alpha: float, Ms: float, thickness: float,
+        width_x: float, width_y: float, temp: float, M3d: np.array, K_surf: float, pool, f_array: np.array, J_array:np.array):
     """
         Calculates the effective field based over a range of applied currents.
 
@@ -113,10 +117,11 @@ def TotalDiagram(
     """
 
     partialSweepH = partial(SingleLine, m0, t_points, alpha, Ms, thickness, width_x,
-                            width_y, temp, M3d, K_surf, f_array, J)
-    HfieldArguments = [x for x in HextArray][0].tolist()
+                            width_y, temp, M3d, K_surf, f_array, HextX)
 
-    resultsIterable = tqdm(pool.istarmap(partialSweepH, HfieldArguments), total=len(HfieldArguments))
+    J_arguments =[[J] for J in J_array]
+
+    resultsIterable = tqdm(pool.istarmap(partialSweepH, J_arguments), total=len(J_arguments))
     results = tuple(resultsIterable)
     print("done")
     return results
@@ -133,7 +138,7 @@ def packagingForPlotting(inputDictionaryTuple: tuple, gridSize: int):
         :returns: A list of lists, with each entry a sweep over the current at a specific field strength.
     """
 
-    stateArray = np.zeros((gridSize, gridSize))
+    stateArray = np.zeros((gridSize, gridSize)) #+1 for extra f=0 run
     for index, currentDictionary in enumerate(inputDictionaryTuple):
         currentArray = []
         for current, state in currentDictionary.items():
@@ -155,14 +160,14 @@ def onclick(event, fig, ax, line_x, line_y):
 
 def PhaseDiagramPlot(X, Y, result, freq_array):
 
-    # our custom colormap:
-    cmap_2 = plt.get_cmap("inferno").copy()
+    #our custom colormap:
+    cmap_2=plt.get_cmap("inferno").copy()
     cmap_2.set_extremes(over="#39FF14")
 
-    # plot the main diagram
+    # plot the cool diagram
     fig2, ax = plt.subplots(figsize=(6, 6))
-    plt.pcolormesh(X,Y, result, cmap='inferno', picker=5, vmax=90)
-    plt.colorbar()
+    plt.pcolormesh(X, Y, result, picker=5, cmap=cmap_2, vmax=80)
+    plt.colorbar(extend="max")
 
     # display value obtained within the cell (comment away if not wanted:
     # for (x, y), value in np.ndenumerate(result):
@@ -176,31 +181,31 @@ def PhaseDiagramPlot(X, Y, result, freq_array):
     # plt.plot(f_kittel_res,-H_used,lw = 1, color = "white")
 
     # rewrite the labels of the axis to be in Tesla
-    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * 1e3*np.array(plt.yticks()[0][1:-1]), 1))
-    plt.ylabel("$μ_0 H [mT]$")
+    plt.ylabel("$J amplitude [A/m^2]$")
     plt.xlabel("$Freq [Hz]$")
+
+    #line to seperate f=0 and f!=0 regions
+    plt.axvline(x = f_array[int(f_array.size*0.1)], color = 'white', label = 'axvline - full height')
 
     # incorperate stuff that allows us to click plot and in end get variables
     line_x = []
     line_y = []
     fig2.canvas.callbacks.connect('button_press_event', lambda event: onclick(event, fig2, ax, line_x, line_y))
-
     print("Line x-positions:", line_x)
     print("Line y-positions:", line_y)
 
     # plot a cross section at 1/4 horizontal
     fig3 = plt.figure()
     plt.plot(freq_array,result[len(result)//3])
-    plt.xlabel("$Freq [Hz]$")
+    plt.xlabel("$J amplitude [A/m^2]$")
     plt.ylabel("angle_max[°]")
-    plt.title(f"Cross section at H = {np.transpose(Y)[0,len(result)//3]*constants.mu_0 * 1e3:.1f} mT")
+    plt.title(f"Cross section at J_amp = {np.transpose(Y)[0,len(result)//3]:.0f} A/m^2")
 
     plt.show()
 
-    #after closing shows where clicked
+    #after closing all show where clicked
     print("Line x-positions:", line_x)
     print("Line y-positions:", line_y)
-
 
 
 if __name__ == '__main__':
@@ -212,7 +217,7 @@ if __name__ == '__main__':
     width_x = 130e-9    # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9     # [m]
     temperature = 3     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    J = -2e11      #[A/m^2]: current density amplitude
+    HextX = -1e3        # X component of the magnetic field
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
@@ -220,12 +225,9 @@ if __name__ == '__main__':
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
     t = np.arange(0, 4e-9, 5e-12)
-    gridSize = 100
+    gridSize = 30
     f_array = np.linspace(5e8, 7e9, gridSize)
-    HextX = np.linspace(-10e3, 2e3, gridSize)  # [A/m]
-    HextY = np.linspace(0, 0, gridSize)  # [A/m]
-    HextZ = np.linspace(0, 0, gridSize)  # [A/m]
-    HextArray = np.dstack([HextX, HextY, HextZ])
+    J_array = np.linspace(-1.2e11, -1e9, gridSize) #-1.2e11
 
     start = time.time()
     print("Starting calculation.....")
@@ -234,9 +236,9 @@ if __name__ == '__main__':
         cpu_available = os.cpu_count() - 1 # use all but 1 to ensure can still type/etc. (it is possible to use all)
         print(f"Using {cpu_available} cores to simulate...")
         pool = Pool(cpu_available)
-        phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, pool, f_array,J)
+        phaseDictionaryTuple = TotalDiagram(m0, t, HextX, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, pool, f_array,J_array)
     except Exception as error:
-        print("Error was encoutered:",error)    # catch an exception in case anything happens
+        raise Exception("F in the chat for another error:").with_traceback(error.__traceback__)   # catch an exception in case anything happens
     finally:
         pool.close() # Be sure to in end close the pool!!! (computer won't like it else):
 
@@ -244,6 +246,6 @@ if __name__ == '__main__':
         print(f"process finished in {end - start} seconds")
 
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
-        X, Y = np.meshgrid(f_array, HextX)  # Yes we also need to turn into meshgrid
+        X, Y = np.meshgrid(f_array, J_array)  # Yes we also need to turn into meshgrid
 
         PhaseDiagramPlot(X, Y, result,f_array)
