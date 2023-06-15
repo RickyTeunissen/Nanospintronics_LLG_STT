@@ -110,21 +110,28 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
     """
     m3d -= m3d - m3d / sqrt(sum(m3d ** 2))
 
+    #calculate angle with X axis
     mx, my, mz = m3d
-    #thetaX = np.arccos(np.dot([mx, my, mz], M3d))
-    thetaX = np.arctan2(np.sqrt(my ** 2 + mz ** 2), mx)
-    thetaXmax = np.max(thetaX) * 180 / np.pi
+    thetaX = np.arctan2(np.sqrt(my ** 2 + mz ** 2), mx)* 180/np.pi
 
+    # calculate angle with y axis
+    mArray = np.array(m3d).T
+    dotproduct = np.sum(mArray * M3d)
+    magnitudem = np.linalg.norm(mArray)
+    magnitudeM = np.linalg.norm(M3d)
+    angle = np.arccos(dotproduct / (magnitudeM * magnitudem))*180/np.pi
+
+    #determine current system mode 1=AC current, 2=DC current, 3=no current
     global mode
-    if 30<thetaXmax< 120 and mode !=3:
+    if 50<angle< 100 and mode !=3:
         mode = 2
-    elif thetaXmax > 150:
+    if thetaX > 110:
         mode = 3
 
     if mode == 1:
         Jtot = J * Jformula(t)
     elif mode == 2:
-        Jtot = J*1
+        Jtot = -1.5e12
     else:
         Jtot = 0
 
@@ -256,11 +263,11 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     plt.xlabel("Timestep")
 
     # plot fourier transform of mx
-    # plt.figure(4)
-    # t_step_size = t[1] - t[0]
-    # xf = fftfreq(int((t_step_size + t[-1]) / t_step_size), t_step_size)
-    # plt.plot(xf, np.abs(fft(my)))
-    # plt.xlim([0, 2e10])
+    plt.figure(4)
+    t_step_size = t[1] - t[0]
+    xf = fftfreq(int((t_step_size + t[-1]) / t_step_size), t_step_size)
+    plt.plot(xf, np.abs(fft(my)))
+    plt.xlim([0, 2e10])
 
     plt.show()
 
@@ -272,11 +279,11 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-0e3, 0, 0])  # [A/m]
+    Hext = np.array([-1.99e3, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = -0.1e12  # [A/m^2]
+    J = -2e11  # [A/m^2]
     thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -287,11 +294,11 @@ if __name__ == "__main__":
     M3d = polarToCartesian(1, np.pi / 2, np.pi / 6)  # np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 1e-9, 1e-12)
+    t = np.arange(0, 5e-9, 1e-12)
 
     # defininf a custom current over time shape (magnitude defined above)
-    #Jformula = lambda t: 1 # constant current pusle
-    Jformula = lambda t: sin(2 * np.pi * 2.75e9 * t)
+    #Jformula = lambda t: 5 # constant current pusle
+    Jformula = lambda t: sin(2 * np.pi * 2.43e9 * t)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface,
@@ -300,6 +307,10 @@ if __name__ == "__main__":
     end = time.time()
     print(f"Code ran in {end - start} seconds")
 
+    # calulate and print the total "energy/resistance" used = integral(I(t)^2)
+    # times_had_J = np.array([item for item in J_used.keys()])
+    # timesteps = times_had_J[1:]-times_had_J[:-1]
+    # print(np.sum(timesteps*np.array([item for item in J_used.values()])[:-1]**2))
     print(sum([J**2 for J in J_used])) # gebruikt dit NIET, is nog onzin aangezien Jused veel meerder tijden erin heeft zitten
 
     plotResult(mx, my, mz, m0, t, Jformula, J)

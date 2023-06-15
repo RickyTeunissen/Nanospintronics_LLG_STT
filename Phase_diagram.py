@@ -235,13 +235,13 @@ if __name__ == '__main__':
     M3d = LLG.polarToCartesian(1, np.pi/2, np.pi/6)  #np.array([1, 0, 0])
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
-    t = np.arange(0, 10e-9, 5e-12)
-    gridSize = 75
+    t = np.arange(0, 5e-9, 5e-12)
+    gridSize = 107
     Jarray = np.linspace(-0.15e12, 0.15e12, gridSize)
     UseAcJ = False  #True = run AC special plotting too, False = good ol phase diagram
     frequency = 5.83e8
     HexNorm = LLG.polarToCartesian(1, np.pi/2, 0)
-    HexSize = np.linspace(-1e4, 0.5e4, gridSize)
+    HexSize = np.linspace(-1e4, 1e4, gridSize)
     HextX = HexSize * HexNorm[0]  # [A/m]
     HextY = HexSize * HexNorm[1]  # [A/m]
     HextZ = HexSize * HexNorm[2]  # [A/m]
@@ -255,12 +255,14 @@ if __name__ == '__main__':
     print("Starting calculation.....")
 
     try:
-        pool = Pool(os.cpu_count())
+        cpu_available = os.cpu_count() - 1  # use all but 1 to ensure can still type/etc. (it is possible to use all)
+        print(f"Using {cpu_available} cores to simulate")
+        pool = Pool(cpu_available)
+
         phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x,
                      width_y, temperature, M3d, K_surface, UseAcJ, skipLength1, pool, Jarray, frequency, HexNorm)
     finally:
         pool.close()
-
         end = time.time()
         print(f"process finished in {end-start} seconds")
 

@@ -1,6 +1,7 @@
 """
 Within this file, all the code necesarry for constructing phase diagrams will be implemented
 """
+import numpy as np
 import istarmap
 import os
 from matplotlib.colors import ListedColormap
@@ -53,26 +54,35 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
     return analyzedResult
 
 
-def LineAnalysisFreq(inputDictionary, M3d):
+def LineAnalysisFreq(inputDictionary, M3d:np.array):
     """
     :param inputDictionary: The raw LLG results with as key the current and value [mx, my, mz]
+    :param M3d: angle of the fixed layer
 
     :returns: The categorized LLG results with as key the current and as value the maximum angle reached during
     precession
     """
     resultDictionary = {}
     for freq, values in inputDictionary.items():
-        mx, my, mz = values
-
-        # calculate maximum angle w.r.t x axis reached:
         mArray = np.array(values).T
         dotproduct = np.sum(mArray * M3d, axis=1)
         magnitudem = np.linalg.norm(mArray, axis=1)
         magnitudeM = np.linalg.norm(M3d)
         angles = np.arccos(dotproduct / (magnitudeM * magnitudem))
-        thetaXmax = np.max(angles) * 180 / np.pi
+        angle_fixed_max = np.max(angles) * 180 / np.pi
 
-        resultDictionary.update({freq: thetaXmax})
+        if angle_fixed_max>85:
+            angle_fixed_max = np.clip(angle_fixed_max,0,85)  #to not let 1 stray points destroy nice plot
+
+        resultDictionary.update({freq: angle_fixed_max})
+
+
+        # if desired not angle w.r.t. fixed layer but x axis:
+        # # calculate maximum angle w.r.t x axis reached:
+        # thetaX = np.arctan2(np.sqrt(my ** 2 + mz ** 2), mx)
+        # thetaXmax = np.max(thetaX) * 180 / np.pi
+        #
+        # resultDictionary.update({freq: thetaXmax})
 
     return resultDictionary
 
@@ -106,7 +116,6 @@ def TotalDiagram(
                             width_y, temp, M3d, K_surf, f_array, J)
     HfieldArguments = [x for x in HextArray][0].tolist()
 
-    print("mapping ...")
     resultsIterable = tqdm(pool.istarmap(partialSweepH, HfieldArguments), total=len(HfieldArguments))
     results = tuple(resultsIterable)
     print("done")
@@ -144,7 +153,7 @@ def onclick(event, fig, ax, line_x, line_y):
         fig.canvas.draw()
 
 
-def PhaseDiagramPlot(X, Y, result):
+def PhaseDiagramPlot(X, Y, result, freq_array):
 
     fig2, ax = plt.subplots(figsize=(6, 6))
     plt.pcolormesh(X, Y, result, cmap='inferno', picker=5)
@@ -156,23 +165,37 @@ def PhaseDiagramPlot(X, Y, result):
     #     ypos = Y[x,y]
     #     plt.text(xpos, ypos, f"{value:.0f}", va="center", ha="center",color = "grey" )
 
-    # also plot the kittel equation for comparison
+    ## also plot the kittel equation for comparison
     # H_used = np.abs(np.transpose(Y)[0])
     # f_kittel_res = gyro_co*np.sqrt(H_used*(H_used+Ms))/(2*np.pi)
-    # plt.plot(f_kittel_res, H_used, lw=1, color="white")
+    # plt.plot(f_kittel_res,-H_used,lw = 1, color = "white")
 
     # rewrite the labels of the axis to be in Tesla
     plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * 1e3*np.array(plt.yticks()[0][1:-1]), 1))
     plt.ylabel("$μ_0 H [mT]$")
     plt.xlabel("$Freq [Hz]$")
 
+    # incorperate stuff that allows us to click plot and in end get variables
     line_x = []
     line_y = []
-
     fig2.canvas.callbacks.connect('button_press_event', lambda event: onclick(event, fig2, ax, line_x, line_y))
-    plt.show()
+
     print("Line x-positions:", line_x)
     print("Line y-positions:", line_y)
+
+    # plot a cross section at 1/4 horizontal
+    fig3 = plt.figure()
+    plt.plot(freq_array,result[len(result)//3])
+    plt.xlabel("$Freq [Hz]$")
+    plt.ylabel("angle_max[°]")
+    plt.title(f"Cross section at H = {np.transpose(Y)[0,len(result)//3]*constants.mu_0 * 1e3:.1f} mT")
+
+    plt.show()
+
+    #after closing shows where clicked
+    print("Line x-positions:", line_x)
+    print("Line y-positions:", line_y)
+
 
 
 if __name__ == '__main__':
@@ -184,17 +207,17 @@ if __name__ == '__main__':
     width_x = 130e-9    # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9     # [m]
     temperature = 3     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    J = -1e11        #[A/m^2]: current density amplitude
+    J = -2e11      #[A/m^2]: current density amplitude
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
     M3d = polarToCartesian(1, np.pi / 2, 30 / 180 * np.pi)  # 30 degrees w.r.t. long axis
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
-    t = np.arange(0, 1e-9, 5e-12)
-    gridSize = 100
-    f_array = np.linspace(0.5e9, 8e9, gridSize)
-    HextX = np.linspace(-6e3, 50e3, gridSize)  # [A/m]
+    t = np.arange(0, 4e-9, 5e-12)
+    gridSize = 10
+    f_array = np.linspace(5e8, 7e9, gridSize)
+    HextX = np.linspace(-5e3, 5e3, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
@@ -203,10 +226,12 @@ if __name__ == '__main__':
     print("Starting calculation.....")
 
     try:
-        pool = Pool(os.cpu_count() - 1)
+        cpu_available = os.cpu_count() - 1 # use all but 1 to ensure can still type/etc. (it is possible to use all)
+        print(f"Using {cpu_available} cores to simulate...")
+        pool = Pool(cpu_available)
         phaseDictionaryTuple = TotalDiagram(m0, t, HextArray, alpha, Ms, d, width_x, width_y, temperature, M3d, K_surface, pool, f_array,J)
-    except Exception as e:
-        print(e)    # catch an exception in case anything happens
+    except Exception as error:
+        print("Error was encoutered:",error)    # catch an exception in case anything happens
     finally:
         pool.close() # Be sure to in end close the pool!!! (computer won't like it else):
 
@@ -216,4 +241,4 @@ if __name__ == '__main__':
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(f_array, HextX)  # Yes we also need to turn into meshgrid
 
-        PhaseDiagramPlot(X, Y, result)
+        PhaseDiagramPlot(X, Y, result,f_array)
