@@ -150,27 +150,28 @@ def onclick(event, fig, ax, line_x, line_y):
         fig.canvas.draw()
 
 
-def PhaseDiagramPlot(X, Y, result, freq_array):
+def PhaseDiagramPlot(X, Y, result, freq_array, h_array):
 
     # our custom colormap:
     cmap_2 = plt.get_cmap("inferno").copy()
-    cmap_2.set_extremes(over="#39FF14")
+    cmap_2.set_extremes(over="white")
 
     # plot the main diagram
     fig2, ax = plt.subplots(figsize=(6, 6))
-    plt.pcolormesh(X,Y, result, cmap='inferno', picker=5, vmax=90)
-    plt.colorbar()
+    plt.pcolormesh(X,Y, result, cmap=cmap_2, picker=5, vmax=50)
+    plt.colorbar(extend="max")
 
-    # display value obtained within the cell (comment away if not wanted:
+    #display value obtained within the cell (comment away if not wanted):
     # for (x, y), value in np.ndenumerate(result):
     #     xpos = X[x,y]
     #     ypos = Y[x,y]
     #     plt.text(xpos, ypos, f"{value:.0f}", va="center", ha="center",color = "grey" )
 
     ## also plot the kittel equation for comparison
-    # H_used = np.abs(np.transpose(Y)[0])
-    # f_kittel_res = gyro_co*np.sqrt(H_used*(H_used+Ms))/(2*np.pi)
-    # plt.plot(f_kittel_res,-H_used,lw = 1, color = "white")
+    # kittel_f = gyro_co/(np.pi*2)*np.sqrt((h_array)*(h_array + Ms))
+    # plt.plot(kittel_f,h_array,lw=1,color="lime")
+    # print((h_array + (Ny - Nz) * Ms) * (h_array + (Nz - 4 * K_surface / (mu0 * Ms ** 2 * d) - Nx) * Ms))
+    # print(kittel_f)
 
     # rewrite the labels of the axis to be in Tesla
     plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * 1e3*np.array(plt.yticks()[0][1:-1]), 1))
@@ -187,7 +188,7 @@ def PhaseDiagramPlot(X, Y, result, freq_array):
 
     # plot a cross section at 1/4 horizontal
     fig3 = plt.figure()
-    plt.plot(freq_array,result[len(result)//3])
+    plt.plot(freq_array,result[len(result)//2])
     plt.xlabel("$Freq [Hz]$")
     plt.ylabel("angle_max[°]")
     plt.title(f"Cross section at H = {np.transpose(Y)[0,len(result)//3]*constants.mu_0 * 1e3:.1f} mT")
@@ -209,7 +210,7 @@ if __name__ == '__main__':
     width_x = 130e-9    # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9     # [m]
     temperature = 3     # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    J = -2e11      #[A/m^2]: current density amplitude
+    J = -0.5e11         # [A/m^2]: current density amplitude
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
@@ -217,9 +218,9 @@ if __name__ == '__main__':
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
     t = np.arange(0, 4e-9, 5e-12)
-    gridSize = 100
+    gridSize = 40
     f_array = np.linspace(5e8, 7e9, gridSize)
-    HextX = np.linspace(-10e3, 2e3, gridSize)  # [A/m]
+    HextX = np.linspace(-9e3, 2e3, gridSize)  # [A/m]
     HextY = np.linspace(0, 0, gridSize)  # [A/m]
     HextZ = np.linspace(0, 0, gridSize)  # [A/m]
     HextArray = np.dstack([HextX, HextY, HextZ])
@@ -243,4 +244,4 @@ if __name__ == '__main__':
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(f_array, HextX)  # Yes we also need to turn into meshgrid
 
-        PhaseDiagramPlot(X, Y, result,f_array)
+        PhaseDiagramPlot(X, Y, result,f_array,HextX)

@@ -14,7 +14,7 @@ from tqdm import tqdm
 from math import sin
 import os
 import scipy.constants as constants
-
+import winsound
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
                width_x: float, width_y:float, temp: float, M3d: np.array, K_surf: float,
@@ -190,11 +190,11 @@ def PhaseDiagramPlotDC(X, Y):
     ]
 
     # Add the legend
-    plt.legend(handles=legend_elements)
+    plt.legend(handles=legend_elements, loc='upper right')
 
     # rewrite the labels of the axis to be in Tesla
-    #plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
-    plt.ylabel("$μ_0 H [T]$")
+    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1])*1e3, 2))
+    plt.ylabel("$μ_0 H [mT]$")
     plt.xlabel("$J [A/m^2]$")
 
     plt.show()
@@ -212,8 +212,8 @@ def PhaseDiagramPlotAC(X, Y, title: str):
     plt.colorbar()
 
     # rewrite the labels of the axis to be in Tesla
-    #plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1]), 2))
-    plt.ylabel("$μ_0 H [T]$")
+    plt.yticks(ticks=plt.yticks()[0][1:-1], labels=np.round(constants.mu_0 * np.array(plt.yticks()[0][1:-1])*1e3, 0))
+    plt.ylabel("$μ_0 H [mT]$")
     plt.xlabel("$J [A/m^2]$")
     plt.title(title)
 
@@ -228,20 +228,20 @@ if __name__ == '__main__':
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
-    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
+    temperature = 3  # [K]
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
-    M3d = LLG.polarToCartesian(1, np.pi/2, np.pi/6)  #np.array([1, 0, 0])
+    M3d = LLG.polarToCartesian(1, np.pi/2, np.pi/6)
 
     # which t points solve for, KEEP AS ARANGE (need same distance between points)!!
     t = np.arange(0, 5e-9, 5e-12)
-    gridSize = 107
+    gridSize = 200
     Jarray = np.linspace(-0.15e12, 0.15e12, gridSize)
     UseAcJ = False  #True = run AC special plotting too, False = good ol phase diagram
     frequency = 5.83e8
     HexNorm = LLG.polarToCartesian(1, np.pi/2, 0)
-    HexSize = np.linspace(-1e4, 1e4, gridSize)
+    HexSize = np.linspace(-1.1e4, 1.1e4, gridSize)
     HextX = HexSize * HexNorm[0]  # [A/m]
     HextY = HexSize * HexNorm[1]  # [A/m]
     HextZ = HexSize * HexNorm[2]  # [A/m]
@@ -268,6 +268,10 @@ if __name__ == '__main__':
 
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(Jarray, HextX)  # Yes we also need to turn into meshgrid
+
+        winsound.Beep(500, 2000)
+        winsound.Beep(800, 1000)
+        winsound.Beep(1300, 500)
 
         if UseAcJ:
             PhaseDiagramPlotAC(X, Y, str(frequency))

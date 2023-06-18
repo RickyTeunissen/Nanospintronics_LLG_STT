@@ -10,6 +10,7 @@ from multiprocessing import Pool
 from functools import partial
 from tqdm import tqdm
 from LLG_solver import *
+import winsound
 
 
 def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickness: float,
@@ -41,7 +42,7 @@ def SingleLine(m0: np.array, t_points: np.array, alpha: float, Ms: float, thickn
     resultDictionary = {}
     for freq in f_array:
 
-        if freq < f_array[int(f_array.size * 0.1)]:  # plot first few frequencies as if DC current s.t. later get idea
+        if freq > f_array[-int(f_array.size * 0.1)]:  # plot first/last few frequencies as if DC current s.t. later get idea
             Jformula = lambda t: 1
         else:
             # new current SHAPE for this run (amplitude was predefined):
@@ -159,7 +160,7 @@ def onclick(event, fig, ax, line_x, line_y):
 def PhaseDiagramPlot(X, Y, result, freq_array):
     # our custom colormap:
     cmap_2 = plt.get_cmap("inferno").copy()
-    cmap_2.set_extremes(over="#39FF14")
+    cmap_2.set_extremes(over="white")
 
     # plot the cool diagram
     fig2, ax = plt.subplots(figsize=(6, 6))
@@ -182,7 +183,7 @@ def PhaseDiagramPlot(X, Y, result, freq_array):
     plt.xlabel("$Freq [Hz]$")
 
     # line to seperate f=0 and f!=0 regions
-    plt.axvline(x=f_array[int(f_array.size * 0.1)], color='white', label='axvline - full height')
+    plt.axvline(x=f_array[-int(f_array.size * 0.1)], color='white', label='axvline - full height')
 
     # incorperate stuff that allows us to click plot and in end get variables
     line_x = []
@@ -193,10 +194,10 @@ def PhaseDiagramPlot(X, Y, result, freq_array):
 
     # plot a cross section at 1/4 horizontal
     fig3 = plt.figure()
-    plt.plot(freq_array, result[len(result) // 3])
+    plt.plot(freq_array, result[len(result) // 2])
     plt.xlabel("$J amplitude [A/m^2]$")
     plt.ylabel("angle_max[°]")
-    plt.title(f"Cross section at J_amp = {np.transpose(Y)[0, len(result) // 3]:.0f} A/m^2")
+    plt.title(f"Cross section at J_amp = {np.transpose(Y)[0, len(result) // 2]:.0f} A/m^2")
 
     plt.show()
 
@@ -213,8 +214,8 @@ if __name__ == '__main__':
     d = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
-    temperature = 3  # [K], note: need like 1e5 to see really in plot (just like MATLAB result)
-    HextX = -1e3  # X component of the magnetic field
+    temperature = 3  # [K]
+    HextX = -8e3  # X component of the magnetic field
 
     # initial direction free layer and fixed layer
     m0 = np.array([1, 0, 0])
@@ -222,7 +223,7 @@ if __name__ == '__main__':
 
     # which points solve for, KEEP AS ARANGE or linspace (need same distance between points)!!
     t = np.arange(0, 4e-9, 5e-12)
-    gridSize = 30
+    gridSize = 75
     f_array = np.linspace(5e8, 7e9, gridSize)
     J_array = np.linspace(-1.2e11, -1e9, gridSize)  # -1.2e11
 
@@ -247,5 +248,30 @@ if __name__ == '__main__':
 
         result = packagingForPlotting(phaseDictionaryTuple, gridSize)
         X, Y = np.meshgrid(f_array, J_array)  # Yes we also need to turn into meshgrid
+
+        c = [
+            (880, 700),
+            (587, 1000),
+            (698, 500),
+            (880, 500),
+            (587, 1000),
+            (698, 500),
+            (880, 250),
+            (1046, 250),
+            (988, 500),
+            (784, 500),
+            (699, 230),
+            (784, 250),
+            (880, 500),
+            (587, 500),
+            (523, 250),
+            (659, 250),
+            (587, 750)
+        ]
+
+        for note in c:
+            freq = note[0]
+            duration = int(note[1]*0.7)
+            winsound.Beep(freq,duration)
 
         PhaseDiagramPlot(X, Y, result, f_array)
