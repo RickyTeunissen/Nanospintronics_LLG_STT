@@ -190,6 +190,8 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     f = plt.figure(1, figsize=(8, 7))
     axf = f.add_subplot(projection="3d")
     axf.plot(mx, my, mz, "b-", lw=0.3)
+    axf.plot([0, M3d[0]],[0,M3d[1]],[0,M3d[2]], "r--")
+    axf.plot([0, 1], [0, 0], [0, 0], "b--")
     last_part = np.floor(mz.shape[0] * 0.1).astype(int)  # draw last 10% green to show e.g. stable orbit shape
     axf.plot(mx[-last_part:], my[-last_part:], mz[-last_part:], color="lime", lw=2)
     axf.scatter(m0[0], m0[1], m0[2], color="red", lw=3)  # startpoint
@@ -206,19 +208,20 @@ def plotResult(mx: np.array, my: np.array, mz: np.array, m0: np.array, t: np.arr
     axf.set_xlim([-1, 1])
     axf.set_ylim([-1, 1])
     axf.set_zlim([-1, 1])
+    axf.legend(["trajectory", "Fixed layer", "$H_{eff}$"],loc="upper left",)
 
     fig2, ax = plt.subplots(4, 1, sharex=True)
     fig2.suptitle("Magnetization over time", fontweight="bold")
     ax[0].plot(t, mx, lw=0.6)
-    ax[0].set_ylabel("mx/Ms")
+    ax[0].set_ylabel("$m_x/M_s$")
     ax[0].set_ylim([-1.1, 1.1])
     ax[0].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
     ax[1].plot(t, my, lw=0.6)
-    ax[1].set_ylabel("my/Ms")
+    ax[1].set_ylabel("$m_y/M_s$")
     ax[1].set_ylim([-1.1, 1.1])
     ax[1].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
     ax[2].plot(t, mz, lw=0.6)
-    ax[2].set_ylabel("mz/Ms")
+    ax[2].set_ylabel("$m_z/M_s$")
     ax[2].set_ylim([-1.1, 1.1])
     ax[2].tick_params(direction="in", bottom=True, top=True, left=True, right=True)
     ax[3].plot(t, np.multiply(J_amp, list(map(Jformula, t))))
@@ -248,11 +251,11 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-5e4, 0, 0])  # [A/m]
+    Hext = np.array([-1e2, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = -0.1e12  # [A/m^2]
+    J = -0.82e11  # [A/m^2]
     thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -267,7 +270,7 @@ if __name__ == "__main__":
 
     # defininf a custom current over time shape (magnitude defined above)
     Jformula = lambda t: 1 # constant current pusle
-    # Jformula = lambda t: sin(2 * np.pi * 2.4e9 * t)
+    #Jformula = lambda t: sin(2 * np.pi * 2.71e9 * t)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface,

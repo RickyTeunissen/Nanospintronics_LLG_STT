@@ -125,13 +125,13 @@ def LLG(t, m3d: np.array, Hext: np.array, alpha: float, Ms: float, J: float, d: 
     global mode
     if 50<angle< 100 and mode !=3:
         mode = 2
-    if thetaX > 110:
+    if thetaX > 130:
         mode = 3
 
     if mode == 1:
         Jtot = J * Jformula(t)
     elif mode == 2:
-        Jtot = -1.5e12
+        Jtot = -11e11
     else:
         Jtot = 0
 
@@ -279,11 +279,11 @@ if __name__ == "__main__":
     start = time.time()
 
     # defining relevant system parameters:
-    Hext = np.array([-1.99e3, 0, 0])  # [A/m]
+    Hext = np.array([-1e3, 0, 0])  # [A/m]
     alpha = 0.01  # SHOULD BE 0.01 FOR Cu!
     Ms = 1.27e6  # [A/m]
     K_surface = 0.5e-3  # J/m^2
-    J = -2e11  # [A/m^2]
+    J = -1.5e11  # [A/m^2]
     thickness = 3e-9  # [m]
     width_x = 130e-9  # [m] need width_x > width_y >> thickness (we assume super flat ellipsoide)
     width_y = 70e-9  # [m]
@@ -297,8 +297,8 @@ if __name__ == "__main__":
     t = np.arange(0, 5e-9, 1e-12)
 
     # defininf a custom current over time shape (magnitude defined above)
-    #Jformula = lambda t: 5 # constant current pusle
-    Jformula = lambda t: sin(2 * np.pi * 2.43e9 * t)
+    # Jformula = lambda t: 1 # constant current pulse
+    Jformula = lambda t: sin(2 * np.pi * 2.71e9 * t)
 
     # solving the system
     mx, my, mz = LLG_solver(m0, t, Hext, alpha, Ms, J, thickness, width_x, width_y, temperature, M3d, K_surface,
