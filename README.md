@@ -29,7 +29,7 @@ Things which are included are:
   - A demagnetization field for a thin elliptical cylinder (=shape anisotropy)
   - A surface anisotropy 
   - A stochastic temperature field
-- Symmetric slowensci spin transfer torque 
+- Symmetric slowensci spin transfer torque simplified to be "sin-like" 
 
 ## About the Files and using this code
 This project consists of multiple files each with their purpose, the most important ones are:
