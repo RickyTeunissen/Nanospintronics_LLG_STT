@@ -32,6 +32,8 @@ Things which are included are:
 - Symmetric slowensci spin transfer torque simplified to be "sin-like" 
 
 ## About the Files and using this code
+NOTE: some of the filenames have not yet been updated/added to this list (still todo)
+
 This project consists of multiple files each with their purpose, the most important ones are:
 - LLG_solver: contains all important functions for solving the LLG equation, can also be run on its own to investigate the dynamics at given input parameters
 - Phase_diagram.py: Can be run to create a phase diagram of the system. It does so by simulaating the LLG equation for various strenghts of the input current and field and after a while looking at the state the system is in. Alyternatively one can also set ... to TRUE to get a phase diagram showing the maximum angle achieved during the precession to e.g. investigate the effect of AC currents 
